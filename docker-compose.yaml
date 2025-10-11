@@ -1,0 +1,155 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: face-recognition-api
+    volumes:
+    - ./src:/app/src
+    - ./alembic:/app/alembic
+    - ./data:/app/data
+    env_file:
+    - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+    - face-recognition-network
+    restart: unless-stopped
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+    labels:
+    - traefik.enable=true
+    - traefik.http.services.api.loadbalancer.server.port=8000
+    - traefik.http.routers.api-secure.rule=Host(`${DOMAIN:-localhost}`) && (PathPrefix(`/api`)
+      || PathPrefix(`/health`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || PathPrefix(`/openapi.json`))
+    - traefik.http.routers.api-secure.entrypoints=websecure
+    - traefik.http.routers.api-secure.tls=true
+    - traefik.http.routers.api-secure.tls.certresolver=myresolver
+    - traefik.http.routers.api-secure.middlewares=api-auth
+    - traefik.http.routers.api-http.rule=Host(`${DOMAIN:-localhost}`) && (PathPrefix(`/api`)
+      || PathPrefix(`/health`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || PathPrefix(`/openapi.json`))
+    - traefik.http.routers.api-http.entrypoints=web
+    - traefik.http.routers.api-http.middlewares=api-auth
+    # Uncomment below for NVIDIA GPU support on Linux servers:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #       - driver: nvidia
+    #         count: 1
+    #         capabilities:
+    #         - gpu
+  # CHANGE IN PRODUCTION - see .env.example
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: face-recognition-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: facedb
+    volumes:
+    - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U postgres
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+    - face-recognition-network
+  # CHANGE IN PRODUCTION - see .env.example
+  redis:
+    image: redis:7-alpine
+    container_name: face-recognition-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD:-redis_change_me}
+    volumes:
+    - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test:
+      - CMD
+      - redis-cli
+      - --raw
+      - incr
+      - ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+    - face-recognition-network
+  web:
+    image: node:20-alpine
+    container_name: face-recognition-web
+    working_dir: /app
+    volumes:
+    - ./web:/app
+    - /app/node_modules
+    - ./web-entrypoint.sh:/web-entrypoint.sh:ro
+    - htpasswd_data:/shared
+    entrypoint:
+    - /bin/sh
+    - /web-entrypoint.sh
+    command: sh -c "npm install && npm run dev"
+    restart: unless-stopped
+    networks:
+    - face-recognition-network
+    depends_on:
+    - app
+    env_file:
+    - .env
+    environment:
+    - PORT=3000
+    labels:
+    - traefik.enable=true
+    - traefik.http.services.web.loadbalancer.server.port=3000
+    - traefik.http.routers.web-secure.rule=Host(`${DOMAIN:-localhost}`)
+    - traefik.http.routers.web-secure.entrypoints=websecure
+    - traefik.http.routers.web-secure.tls=true
+    - traefik.http.routers.web-secure.tls.certresolver=myresolver
+    - traefik.http.routers.web-secure.priority=1
+    - traefik.http.routers.web-secure.middlewares=web-auth
+    - traefik.http.routers.web-http.rule=Host(`${DOMAIN:-localhost}`)
+    - traefik.http.routers.web-http.entrypoints=web
+    - traefik.http.routers.web-http.priority=1
+    - traefik.http.routers.web-http.middlewares=web-auth
+    - traefik.http.middlewares.web-auth.basicauth.usersfile=/shared/.htpasswd
+    - traefik.http.middlewares.api-auth.basicauth.usersfile=/shared/.htpasswd
+    - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
+    - traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true
+  traefik:
+    image: traefik:v3.0.2
+    container_name: face-recognition-traefik
+    command:
+    - --api.insecure=true
+    - --providers.docker=true
+    - --providers.docker.exposedbydefault=false
+    - --entrypoints.web.address=:80
+    - --entrypoints.websecure.address=:443
+    - --certificatesresolvers.myresolver.acme.tlschallenge=true
+    - --certificatesresolvers.myresolver.acme.email=${ACME_EMAIL:-admin@example.com}
+    - --certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json
+    ports:
+    - 80:80
+    - 443:443
+    - 8080:8080
+    restart: unless-stopped
+    volumes:
+    - ./letsencrypt:/letsencrypt
+    - /var/run/docker.sock:/var/run/docker.sock:ro
+    - /etc/localtime:/etc/localtime:ro
+    - htpasswd_data:/shared:ro
+    networks:
+    - face-recognition-network
+    depends_on:
+    - web
+volumes:
+  postgres_data: null
+  redis_data: null
+  htpasswd_data: null
+networks:
+  face-recognition-network:
+    driver: bridge

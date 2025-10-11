@@ -1,0 +1,18 @@
+# Include production dependencies
+-r requirements.txt
+
+# Development Tools
+black==24.10.0
+ruff==0.8.3
+mypy==1.13.0
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.24.0
+pytest-cov==6.0.0
+httpx==0.28.1
+
+# Type stubs
+types-redis==4.6.0.20241004
+types-Pillow==10.2.0.20240822
+boto3-stubs[rekognition,s3]==1.35.76

@@ -1,0 +1,44 @@
+# Docker Compose override for webcam functionality (Linux ONLY)
+#
+# ⚠️  IMPORTANT: This file is for Linux hosts only!
+# On macOS/Windows, run webcam_daemon.py directly on the host instead.
+#
+# Usage (Linux):
+#   docker-compose -f docker-compose.yaml -f docker-compose.webcam.yaml up -d
+#
+# This file adds webcam-specific configurations to the main docker-compose.yaml
+
+services:
+  app:
+    # Mount camera devices (Linux only)
+    devices:
+      - /dev/video0:/dev/video0  # Default webcam
+      # Add more cameras if needed:
+      # - /dev/video1:/dev/video1
+      # - /dev/video2:/dev/video2
+
+    # Grant video group access
+    group_add:
+      - video
+
+    # Optional: Run as privileged (NOT recommended for production)
+    # Only use if you have persistent permission issues
+    # privileged: true
+
+  # Optional: Standalone webcam daemon service
+  # Uncomment to run webcam as separate container
+  # webcam:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: face-recognition-webcam
+  #   devices:
+  #     - /dev/video0:/dev/video0
+  #   env_file:
+  #     - .env
+  #   depends_on:
+  #     - app
+  #   networks:
+  #     - face-recognition-network
+  #   restart: unless-stopped
+  #   command: python webcam_daemon.py --camera 0 --mode daemon

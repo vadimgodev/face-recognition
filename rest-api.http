@@ -1,0 +1,268 @@
+### Face Recognition API - HTTP Client Requests
+### Base URL
+@baseUrl = http://localhost:8000
+@apiBase = {{baseUrl}}/api/v1
+
+################################################################################
+### Health Check
+################################################################################
+
+### Check API Health
+GET {{baseUrl}}/health
+
+################################################################################
+### Face Enrollment
+################################################################################
+
+### Enroll Face - Alice
+POST {{apiBase}}/faces/enroll
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="image"; filename="alice.jpg"
+Content-Type: image/jpeg
+
+< ./sample_data/alice.jpg
+--boundary
+Content-Disposition: form-data; name="user_name"
+
+Alice
+--boundary--
+
+### Enroll Face - Bob
+POST {{apiBase}}/faces/enroll
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="image"; filename="bob.jpg"
+Content-Type: image/jpeg
+
+< ./sample_data/bob.jpg
+--boundary
+Content-Disposition: form-data; name="user_name"
+
+Bob
+--boundary--
+
+### Enroll Face - Charlie
+POST {{apiBase}}/faces/enroll
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="image"; filename="charlie.jpg"
+Content-Type: image/jpeg
+
+< ./sample_data/charlie.jpg
+--boundary
+Content-Disposition: form-data; name="user_name"
+
+Charlie
+--boundary--
+
+### Enroll Face - With Email (Optional)
+POST {{apiBase}}/faces/enroll
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="image"; filename="alice.jpg"
+Content-Type: image/jpeg
+
+< ./sample_data/alice.jpg
+--boundary
+Content-Disposition: form-data; name="user_name"
+
+Test User
+--boundary
+Content-Disposition: form-data; name="user_email"
+
+test@example.com
+--boundary--
+
+################################################################################
+### Face Recognition
+################################################################################
+
+### Recognize Face - alice_test.jpg (should match Alice)
+POST {{apiBase}}/faces/recognize
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="image"; filename="alice_test.jpg"
+Content-Type: image/jpeg
+
+< ./sample_data/alice_test.jpg
+--boundary
+Content-Disposition: form-data; name="max_results"
+
+10
+--boundary
+Content-Disposition: form-data; name="confidence_threshold"
+
+0.8
+--boundary--
+
+### Recognize Face - bob_test.jpg (should match Bob)
+POST {{apiBase}}/faces/recognize
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="image"; filename="bob_test.jpg"
+Content-Type: image/jpeg
+
+< ./sample_data/bob_test.jpg
+--boundary
+Content-Disposition: form-data; name="max_results"
+
+5
+--boundary
+Content-Disposition: form-data; name="confidence_threshold"
+
+0.8
+--boundary--
+
+### Recognize Face - Best Match Only (limit=1)
+POST {{apiBase}}/faces/recognize
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="image"; filename="charlie_test.jpg"
+Content-Type: image/jpeg
+
+< ./sample_data/charlie_test.jpg
+--boundary
+Content-Disposition: form-data; name="max_results"
+
+1
+--boundary
+Content-Disposition: form-data; name="confidence_threshold"
+
+0.8
+--boundary--
+
+### Recognize Face - Lower Confidence Threshold
+POST {{apiBase}}/faces/recognize
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="image"; filename="unknown.jpg"
+Content-Type: image/jpeg
+
+< ./sample_data/unknown.jpg
+--boundary
+Content-Disposition: form-data; name="max_results"
+
+10
+--boundary
+Content-Disposition: form-data; name="confidence_threshold"
+
+0.5
+--boundary--
+
+################################################################################
+### List and Retrieve Faces
+################################################################################
+
+### List All Enrolled Faces
+GET {{apiBase}}/faces
+
+### List Faces with Pagination
+GET {{apiBase}}/faces?limit=10&offset=0
+
+### Get Face by ID (replace with actual ID from enrollment response)
+# @faceId = paste-face-id-here
+GET {{apiBase}}/faces/{{faceId}}
+
+### Get User Photos
+GET {{apiBase}}/faces/user/Alice/photos
+
+### Get Face Image (replace with actual ID)
+# @faceId = paste-face-id-here
+GET {{apiBase}}/faces/{{faceId}}/image
+
+################################################################################
+### Delete Faces
+################################################################################
+
+### Delete Face by ID (replace with actual ID)
+# @faceId = paste-face-id-here
+DELETE {{apiBase}}/faces/{{faceId}}
+
+################################################################################
+### Advanced Usage Examples
+################################################################################
+
+### High Precision Search (confidence > 95%)
+POST {{apiBase}}/faces/recognize
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="image"; filename="test.jpg"
+Content-Type: image/jpeg
+
+< ./sample_data/test.jpg
+--boundary
+Content-Disposition: form-data; name="max_results"
+
+2
+--boundary
+Content-Disposition: form-data; name="confidence_threshold"
+
+0.95
+--boundary--
+
+### Low Threshold Search (find any potential matches)
+POST {{apiBase}}/faces/recognize
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="image"; filename="unknown.jpg"
+Content-Type: image/jpeg
+
+< ./sample_data/unknown.jpg
+--boundary
+Content-Disposition: form-data; name="max_results"
+
+10
+--boundary
+Content-Disposition: form-data; name="confidence_threshold"
+
+0.3
+--boundary--
+
+################################################################################
+### Notes:
+###
+### 1. Variables:
+###    - @baseUrl: Base API URL (default: http://localhost:8000)
+###    - @apiBase: API v1 base path
+###    - @faceId: Face ID (update after enrollment)
+###
+### 2. Parameters:
+###    Enrollment:
+###    - user_name (required): Display name
+###    - user_email (optional): Email address
+###    - image (required): Face image file
+###
+###    Recognition:
+###    - image (required): Face image to recognize
+###    - max_results (default: 10): Maximum matches to return
+###    - confidence_threshold (default: 0.8): Minimum similarity (0.0-1.0)
+###
+### 3. Performance:
+###    - InsightFace only: ~100-200ms
+###    - Smart hybrid: ~200-500ms (uses AWS fallback for low confidence)
+###    - AWS only: ~500ms-5s (depends on collection size)
+###
+### 4. Best Practices:
+###    - Use confidence_threshold >= 0.8 for production
+###    - Use max_results=1 when only best match needed
+###    - Check quality_score in enrollment response
+###
+### 5. Response Codes:
+###    - 200: Success (GET, POST recognize)
+###    - 201: Created (POST enroll)
+###    - 400: Bad request (invalid image, missing params)
+###    - 404: Not found
+###    - 500: Server error
+###
+################################################################################
