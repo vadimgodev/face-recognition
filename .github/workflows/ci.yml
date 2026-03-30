@@ -18,7 +18,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install linting tools
-        run: pip install ruff black
+        run: pip install 'ruff>=0.8,<1.0' 'black>=24.10,<25.0'
 
       - name: Run ruff
         run: ruff check src/ tests/

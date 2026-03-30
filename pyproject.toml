@@ -40,7 +40,8 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
-"src/database/models.py" = ["UP007"]  # SQLAlchemy Mapped[] needs Optional[], not X | None
+"src/database/models.py" = ["UP"]  # SQLAlchemy Mapped[] needs Optional[] at runtime
+"src/providers/liveness_base.py" = ["UP"]  # StrEnum not available in Python 3.9
 
 [tool.mypy]
 python_version = "3.11"
