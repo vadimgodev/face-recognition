@@ -5,6 +5,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.requests import Request
 
 from src.api.routes import router as faces_router, webcam_router
 from src.api.schemas import HealthCheckResponse, ErrorResponse
@@ -13,6 +14,7 @@ from src.database.base import engine
 from src.providers.factory import get_face_provider
 from src.middleware.auth import APITokenMiddleware
 from src.cache.redis_client import get_redis_client
+from src.exceptions import FaceRecognitionError
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +124,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Face Recognition API",
     description="A flexible face recognition system with enrollment and identification capabilities",
-    version="0.1.0",
+    version=settings.APP_VERSION,
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -142,6 +144,20 @@ app.add_middleware(APITokenMiddleware)
 
 
 # Exception handlers
+@app.exception_handler(FaceRecognitionError)
+async def face_recognition_error_handler(request: Request, exc: FaceRecognitionError):
+    """Handle known application errors with proper status codes."""
+    logger.warning(f"Application error: {exc.message}")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "success": False,
+            "error": type(exc).__name__,
+            "detail": exc.message,
+        },
+    )
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     """Global exception handler for unhandled errors."""
@@ -168,7 +184,7 @@ async def health_check():
     return HealthCheckResponse(
         status="healthy",
         timestamp=datetime.utcnow(),
-        version="0.1.0",
+        version=settings.APP_VERSION,
     )
 
 
@@ -183,7 +199,7 @@ async def root():
     """Root endpoint with API information."""
     return {
         "name": "Face Recognition API",
-        "version": "0.1.0",
+        "version": settings.APP_VERSION,
         "description": "A flexible face recognition system",
         "docs": "/docs",
         "health": "/health",

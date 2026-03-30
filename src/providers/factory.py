@@ -28,6 +28,8 @@ class ProviderFactory:
         """
         Create a face provider instance.
 
+        Uses cached singletons for known providers to avoid reloading heavy models.
+
         Args:
             provider_name: Name of the provider (defaults to settings.face_provider)
 
@@ -40,6 +42,11 @@ class ProviderFactory:
         if provider_name is None:
             provider_name = settings.face_provider
 
+        if provider_name == "insightface":
+            return get_insightface_provider()
+        elif provider_name == "aws_rekognition":
+            return get_aws_provider()
+
         provider_class = cls._providers.get(provider_name)
         if not provider_class:
             available = ", ".join(cls._providers.keys())
@@ -47,15 +54,6 @@ class ProviderFactory:
                 f"Unsupported provider: {provider_name}. "
                 f"Available providers: {available}"
             )
-
-        # For InsightFace, pass settings explicitly
-        if provider_name == "insightface":
-            return InsightFaceProvider(
-                model_name=settings.insightface_model,
-                det_size=(settings.insightface_det_size, settings.insightface_det_size),
-                ctx_id=settings.insightface_ctx_id,
-            )
-
         return provider_class()
 
     @classmethod

@@ -1,10 +1,15 @@
+import logging
 from typing import Union
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
+
+    APP_VERSION: str = "1.0.0"
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -16,7 +21,7 @@ class Settings(BaseSettings):
     # Application
     app_name: str = Field(default="face-recognition-api", alias="APP_NAME")
     app_env: str = Field(default="development", alias="APP_ENV")
-    debug: bool = Field(default=True, alias="DEBUG")
+    debug: bool = Field(default=False, alias="DEBUG")
     api_host: str = Field(default="0.0.0.0", alias="API_HOST")
     api_port: int = Field(default=8000, alias="API_PORT")
 
@@ -237,6 +242,12 @@ class Settings(BaseSettings):
         description="Save cropped images of all detected faces (not just matched)",
     )
 
+    # Face Quality Thresholds
+    face_quality_min_size: int = Field(default=80, alias="FACE_QUALITY_MIN_SIZE", description="Minimum face size in pixels")
+    face_quality_max_blur: float = Field(default=100.0, alias="FACE_QUALITY_MAX_BLUR", description="Maximum blur variance (Laplacian)")
+    face_quality_min_brightness: float = Field(default=40.0, alias="FACE_QUALITY_MIN_BRIGHTNESS", description="Minimum average brightness")
+    face_quality_max_brightness: float = Field(default=220.0, alias="FACE_QUALITY_MAX_BRIGHTNESS", description="Maximum average brightness")
+
     # Region of Interest (ROI) Settings for Door/Entrance Scenarios
     roi_enabled: bool = Field(
         default=False,
@@ -324,6 +335,15 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return [origin.strip() for origin in v.split(",")]
         return v
+
+    @model_validator(mode="after")
+    def validate_settings(self):
+        """Validate settings combinations."""
+        if not self.secret_key and not self.debug:
+            logger.warning("SECRET_KEY is empty and debug mode is disabled. Authentication will reject all requests.")
+        if self.storage_backend == "s3" and not self.storage_s3_bucket:
+            raise ValueError("STORAGE_S3_BUCKET must be set when STORAGE_BACKEND is 's3'")
+        return self
 
     # Logging
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")

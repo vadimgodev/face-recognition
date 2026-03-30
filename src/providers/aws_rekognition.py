@@ -12,6 +12,7 @@ from src.providers.base import (
 )
 from src.providers.collection_manager import get_collection_manager
 from src.config.settings import settings
+from src.exceptions import NoFaceDetectedError, InvalidImageError, ProviderError
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +141,7 @@ class AWSRekognitionProvider(FaceProvider):
 
             # Check if face was detected
             if not response["FaceRecords"]:
-                raise ValueError("No face detected in image")
+                raise NoFaceDetectedError()
 
             face_record = response["FaceRecords"][0]
             face_detail = face_record["Face"]
@@ -173,11 +174,11 @@ class AWSRekognitionProvider(FaceProvider):
         except ClientError as e:
             error_code = e.response["Error"]["Code"]
             if error_code == "InvalidParameterException":
-                raise ValueError(f"Invalid image: {e}") from e
+                raise InvalidImageError(f"Invalid image: {e}") from e
             elif error_code == "InvalidImageFormatException":
-                raise ValueError("Invalid image format") from e
+                raise InvalidImageError("Invalid image format") from e
             else:
-                raise Exception(f"AWS Rekognition error: {e}") from e
+                raise ProviderError("aws_rekognition", str(e)) from e
 
     async def recognize_face(
         self, image_bytes: bytes, max_results: int = 10, confidence_threshold: float = 0.8, user_id: Optional[str] = None
@@ -256,9 +257,9 @@ class AWSRekognitionProvider(FaceProvider):
                     # Collection doesn't exist yet, skip it
                     continue
                 elif error_code == "InvalidParameterException":
-                    raise ValueError(f"Invalid image: {e}") from e
+                    raise InvalidImageError(f"Invalid image: {e}") from e
                 elif error_code == "InvalidImageFormatException":
-                    raise ValueError("Invalid image format") from e
+                    raise InvalidImageError("Invalid image format") from e
                 else:
                     # Log error but continue with other collections
                     logger.error(f"Error searching collection {collection_id}: {e}")
@@ -270,11 +271,11 @@ class AWSRekognitionProvider(FaceProvider):
         # Return top max_results matches
         return all_matches[:max_results]
 
-    async def delete_face(self, face_id: str) -> bool:
+    async def delete_face(self, face_id: str, collection_id: str = None) -> bool:
         """Delete a face from the collection."""
         try:
             response = self.client.delete_faces(
-                CollectionId=self.collection_id, FaceIds=[face_id]
+                CollectionId=collection_id or self.collection_id, FaceIds=[face_id]
             )
             deleted_faces = response.get("DeletedFaces", [])
             return face_id in deleted_faces
@@ -307,6 +308,31 @@ class AWSRekognitionProvider(FaceProvider):
 
         except ClientError as e:
             raise Exception(f"Failed to get face details: {e}") from e
+
+    async def compare_faces(self, source_bytes: bytes, target_bytes: bytes,
+                             similarity_threshold: float = 0.0) -> Optional[float]:
+        """Compare two face images using AWS CompareFaces.
+
+        Returns similarity score (0.0-1.0) or None if no match.
+        """
+        import asyncio
+
+        def _compare():
+            response = self.client.compare_faces(
+                SourceImage={'Bytes': source_bytes},
+                TargetImage={'Bytes': target_bytes},
+                SimilarityThreshold=similarity_threshold * 100,
+            )
+            if response.get('FaceMatches'):
+                return response['FaceMatches'][0]['Similarity'] / 100.0
+            return None
+
+        try:
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(None, _compare)
+        except Exception as e:
+            logger.warning(f"AWS CompareFaces failed: {e}")
+            return None
 
     @property
     def provider_name(self) -> str:

@@ -1,9 +1,9 @@
-from typing import List
 import time
 import asyncio
 import json
 import base64
 import logging
+from typing import Optional
 
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, status
 
@@ -13,27 +13,28 @@ import io
 
 from src.config.settings import settings
 from src.api.schemas import (
-    EnrollFaceRequest,
     EnrollFaceResponse,
-    RecognizeFaceRequest,
     RecognizeFaceResponse,
     FaceResponse,
     FaceListResponse,
     DeleteFaceResponse,
     FaceMatchResponse,
     UserPhotosResponse,
-    ErrorResponse,
     BoundingBoxResponse,
     DetectedFaceWithMatches,
-    RecognizeMultipleFacesRequest,
     RecognizeMultipleFacesResponse,
-    LivenessCheckRequest,
     LivenessCheckResponse,
 )
 from src.database.base import get_db
+from src.exceptions import FaceRecognitionError, MultipleFacesDetectedError
 from src.services.face_service import FaceService
 
 logger = logging.getLogger(__name__)
+
+
+async def get_face_service(db: AsyncSession = Depends(get_db)) -> FaceService:
+    """Dependency injection for FaceService."""
+    return FaceService(db)
 
 router = APIRouter(prefix="/api/v1/faces", tags=["faces"])
 webcam_router = APIRouter(prefix="/api/v1/webcam", tags=["webcam"])
@@ -50,15 +51,12 @@ async def enroll_face(
     image: UploadFile = File(..., description="Face image file"),
     user_name: str = Form(..., description="User display name"),
     user_email: str = Form(None, description="User email address"),
-    db: AsyncSession = Depends(get_db),
+    service: FaceService = Depends(get_face_service),
 ):
     """Enroll a new face in the system."""
     try:
         # Read image data
         image_data = await image.read()
-
-        # Create service
-        service = FaceService(db)
 
         # Enroll face
         face = await service.enroll_face(
@@ -73,12 +71,13 @@ async def enroll_face(
             face=FaceResponse.model_validate(face),
         )
 
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except FaceRecognitionError:
+        raise  # Handled by global exception handler in main.py
     except Exception as e:
+        logger.error(f"Unexpected error: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to enroll face: {str(e)}",
+            detail="Internal server error",
         )
 
 
@@ -92,7 +91,7 @@ async def recognize_face(
     image: UploadFile = File(..., description="Face image file"),
     max_results: int = Form(10, description="Maximum number of matches"),
     confidence_threshold: float = Form(0.8, description="Minimum confidence threshold"),
-    db: AsyncSession = Depends(get_db),
+    service: FaceService = Depends(get_face_service),
 ):
     """
     Recognize faces from an uploaded image.
@@ -108,9 +107,6 @@ async def recognize_face(
         image_data_read_start = time.time()
         image_data = await image.read()
         image_read_time = time.time() - image_data_read_start
-
-        # Create service
-        service = FaceService(db)
 
         # Try single-face recognition first
         recognition_start = time.time()
@@ -160,74 +156,66 @@ async def recognize_face(
                 recognition_time=pure_recognition_time,
             )
 
-        except ValueError as e:
-            # Check if error is due to multiple faces
-            if "Multiple faces detected" in str(e):
-                # Auto-route to multi-face recognition if enabled
-                if settings.multiface_enabled:
-                    logger.info(f"Multiple faces detected, routing to multi-face recognition")
+        except MultipleFacesDetectedError as e:
+            if settings.multiface_enabled:
+                # Auto-route to multi-face recognition
+                logger.info("Multiple faces detected, routing to multi-face recognition")
 
-                    face_results, processor = await service.recognize_multiple_faces(
-                        image_data=image_data,
-                        max_results_per_face=max_results,
-                        confidence_threshold=confidence_threshold,
+                face_results, processor = await service.recognize_multiple_faces(
+                    image_data=image_data,
+                    max_results_per_face=max_results,
+                    confidence_threshold=confidence_threshold,
+                )
+                recognition_time = time.time() - recognition_start
+
+                # Flatten results to single list for backward compatibility
+                all_matches = []
+                for face_result in face_results:
+                    all_matches.extend(face_result["matches"])
+
+                # Remove duplicates by user_name (keep highest similarity)
+                seen_users = {}
+                for face, similarity, captured, proc in all_matches:
+                    if face.user_name not in seen_users or similarity > seen_users[face.user_name][1]:
+                        seen_users[face.user_name] = (face, similarity, captured, proc)
+
+                # Convert back to list
+                unique_matches = list(seen_users.values())
+                unique_matches.sort(key=lambda x: x[1], reverse=True)  # Sort by similarity
+
+                # Format response
+                match_responses = [
+                    FaceMatchResponse(
+                        face=FaceResponse.model_validate(face),
+                        similarity=similarity,
+                        photo_captured=captured,
+                        processor=proc,
                     )
-                    recognition_time = time.time() - recognition_start
+                    for face, similarity, captured, proc in unique_matches[:max_results]
+                ]
 
-                    # Flatten results to single list for backward compatibility
-                    all_matches = []
-                    for face_result in face_results:
-                        all_matches.extend(face_result["matches"])
+                execution_time = time.time() - start_time
 
-                    # Remove duplicates by user_name (keep highest similarity)
-                    seen_users = {}
-                    for face, similarity, captured, proc in all_matches:
-                        if face.user_name not in seen_users or similarity > seen_users[face.user_name][1]:
-                            seen_users[face.user_name] = (face, similarity, captured, proc)
-
-                    # Convert back to list
-                    unique_matches = list(seen_users.values())
-                    unique_matches.sort(key=lambda x: x[1], reverse=True)  # Sort by similarity
-
-                    # Format response
-                    match_responses = [
-                        FaceMatchResponse(
-                            face=FaceResponse.model_validate(face),
-                            similarity=similarity,
-                            photo_captured=captured,
-                            processor=proc,
-                        )
-                        for face, similarity, captured, proc in unique_matches[:max_results]
-                    ]
-
-                    execution_time = time.time() - start_time
-
-                    return RecognizeFaceResponse(
-                        success=True,
-                        message=f"Found {len(face_results)} face(s), recognized {len(match_responses)} person(s)",
-                        matches=match_responses,
-                        total_matches=len(match_responses),
-                        processor=processor,
-                        execution_time=round(execution_time, 3),
-                        detection_time=round(recognition_time * 0.2, 3),
-                        recognition_time=round(recognition_time * 0.8, 3),
-                    )
-                else:
-                    # Multi-face not enabled, return original error
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=str(e) + " (Hint: Enable MULTIFACE_ENABLED=true for multi-face recognition)"
-                    )
+                return RecognizeFaceResponse(
+                    success=True,
+                    message=f"Found {len(face_results)} face(s), recognized {len(match_responses)} person(s)",
+                    matches=match_responses,
+                    total_matches=len(match_responses),
+                    processor=processor,
+                    execution_time=round(execution_time, 3),
+                    detection_time=round(recognition_time * 0.2, 3),
+                    recognition_time=round(recognition_time * 0.8, 3),
+                )
             else:
-                # Other ValueError, re-raise
-                raise
+                raise  # Let global handler return 400
 
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except FaceRecognitionError:
+        raise  # Handled by global exception handler in main.py
     except Exception as e:
+        logger.error(f"Unexpected error: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to recognize face: {str(e)}",
+            detail="Internal server error",
         )
 
 
@@ -247,7 +235,7 @@ async def recognize_multiple_faces(
     roi_width: float = Form(0.4, description="ROI width (normalized 0-1)"),
     roi_height: float = Form(0.6, description="ROI height (normalized 0-1)"),
     min_overlap: float = Form(0.3, description="Minimum ROI overlap ratio (0-1)"),
-    db: AsyncSession = Depends(get_db),
+    service: FaceService = Depends(get_face_service),
 ):
     """
     Recognize multiple faces from an uploaded image.
@@ -266,9 +254,6 @@ async def recognize_multiple_faces(
     try:
         # Read image data
         image_data = await image.read()
-
-        # Create service
-        service = FaceService(db)
 
         # Apply ROI filtering if enabled
         detection_start = time.time()
@@ -372,14 +357,13 @@ async def recognize_multiple_faces(
             recognition_time=round(detection_time * 0.85, 3),  # Estimate
         )
 
-    except ValueError as e:
-        logger.error(f"ValueError in recognize_multiple_faces: {str(e)}")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except FaceRecognitionError:
+        raise  # Handled by global exception handler in main.py
     except Exception as e:
-        logger.error(f"Exception in recognize_multiple_faces: {str(e)}", exc_info=True)
+        logger.error(f"Unexpected error: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to recognize multiple faces: {str(e)}",
+            detail="Internal server error",
         )
 
 
@@ -392,11 +376,10 @@ async def recognize_multiple_faces(
 async def list_faces(
     limit: int = 100,
     offset: int = 0,
-    db: AsyncSession = Depends(get_db),
+    service: FaceService = Depends(get_face_service),
 ):
     """List all enrolled faces with pagination."""
     try:
-        service = FaceService(db)
         faces, total = await service.list_faces(limit=limit, offset=offset)
 
         return FaceListResponse(
@@ -407,10 +390,13 @@ async def list_faces(
             offset=offset,
         )
 
+    except FaceRecognitionError:
+        raise  # Handled by global exception handler in main.py
     except Exception as e:
+        logger.error(f"Unexpected error: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list faces: {str(e)}",
+            detail="Internal server error",
         )
 
 
@@ -422,11 +408,10 @@ async def list_faces(
 )
 async def get_face(
     face_id: int,
-    db: AsyncSession = Depends(get_db),
+    service: FaceService = Depends(get_face_service),
 ):
     """Get a specific face by ID."""
     try:
-        service = FaceService(db)
         face = await service.get_face_by_id(face_id)
 
         if not face:
@@ -439,10 +424,13 @@ async def get_face(
 
     except HTTPException:
         raise
+    except FaceRecognitionError:
+        raise  # Handled by global exception handler in main.py
     except Exception as e:
+        logger.error(f"Unexpected error: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get face: {str(e)}",
+            detail="Internal server error",
         )
 
 
@@ -459,11 +447,10 @@ async def get_face(
 )
 async def get_face_image(
     face_id: int,
-    db: AsyncSession = Depends(get_db),
+    service: FaceService = Depends(get_face_service),
 ):
     """Get the face image file."""
     try:
-        service = FaceService(db)
         image_data = await service.get_face_image(face_id)
 
         return StreamingResponse(
@@ -472,14 +459,13 @@ async def get_face_image(
             headers={"Content-Disposition": f"inline; filename=face_{face_id}.jpg"},
         )
 
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except FaceRecognitionError:
+        raise  # Handled by global exception handler in main.py
     except Exception as e:
+        logger.error(f"Unexpected error: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get face image: {str(e)}",
+            detail="Internal server error",
         )
 
 
@@ -491,11 +477,10 @@ async def get_face_image(
 )
 async def get_user_photos(
     user_name: str,
-    db: AsyncSession = Depends(get_db),
+    service: FaceService = Depends(get_face_service),
 ):
     """Get all photos for a user."""
     try:
-        service = FaceService(db)
         photos = await service.get_user_photos(user_name)
 
         if not photos:
@@ -519,10 +504,13 @@ async def get_user_photos(
 
     except HTTPException:
         raise
+    except FaceRecognitionError:
+        raise  # Handled by global exception handler in main.py
     except Exception as e:
+        logger.error(f"Unexpected error: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get user photos: {str(e)}",
+            detail="Internal server error",
         )
 
 
@@ -534,11 +522,10 @@ async def get_user_photos(
 )
 async def delete_face(
     face_id: int,
-    db: AsyncSession = Depends(get_db),
+    service: FaceService = Depends(get_face_service),
 ):
     """Delete a face from the system."""
     try:
-        service = FaceService(db)
         deleted = await service.delete_face(face_id)
 
         if not deleted:
@@ -551,14 +538,15 @@ async def delete_face(
             success=True, message=f"Face {face_id} deleted successfully"
         )
 
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except HTTPException:
         raise
+    except FaceRecognitionError:
+        raise  # Handled by global exception handler in main.py
     except Exception as e:
+        logger.error(f"Unexpected error: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete face: {str(e)}",
+            detail="Internal server error",
         )
 
 
@@ -637,16 +625,15 @@ async def check_liveness(
             execution_time=execution_time,
         )
 
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Liveness check failed: {str(e)}",
-        )
+    except HTTPException:
+        raise
+    except FaceRecognitionError:
+        raise  # Handled by global exception handler in main.py
     except Exception as e:
-        logger.error(f"Liveness detection error: {e}", exc_info=True)
+        logger.error(f"Unexpected error: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to check liveness: {str(e)}",
+            detail="Internal server error",
         )
 
 
@@ -654,8 +641,11 @@ async def check_liveness(
 # Webcam Endpoints
 # ============================================================================
 
-# Global webcam task tracker
-_webcam_task = None
+# Webcam task state (encapsulated to avoid bare globals)
+class _WebcamState:
+    task: Optional[asyncio.Task] = None
+
+_webcam_state = _WebcamState()
 
 
 @webcam_router.post(
@@ -665,8 +655,6 @@ _webcam_task = None
 )
 async def start_webcam():
     """Start webcam capture service."""
-    global _webcam_task
-
     from src.config.settings import settings
     from src.services.webcam_service import get_webcam_service
 
@@ -678,7 +666,7 @@ async def start_webcam():
             detail="Webcam is not enabled in settings (WEBCAM_ENABLED=false)",
         )
 
-    if _webcam_task is not None and not _webcam_task.done():
+    if _webcam_state.task is not None and not _webcam_state.task.done():
         return {
             "success": True,
             "message": "Webcam service is already running",
@@ -686,7 +674,7 @@ async def start_webcam():
         }
 
     # Start webcam service
-    _webcam_task = asyncio.create_task(webcam_service.run_capture_loop())
+    _webcam_state.task = asyncio.create_task(webcam_service.run_capture_loop())
 
     return {
         "success": True,
@@ -705,13 +693,11 @@ async def start_webcam():
 )
 async def stop_webcam():
     """Stop webcam capture service."""
-    global _webcam_task
-
     from src.services.webcam_service import get_webcam_service
 
     webcam_service = get_webcam_service()
 
-    if _webcam_task is None or _webcam_task.done():
+    if _webcam_state.task is None or _webcam_state.task.done():
         return {
             "success": True,
             "message": "Webcam service is not running",
@@ -723,12 +709,12 @@ async def stop_webcam():
 
     # Wait for task to complete (with timeout)
     try:
-        await asyncio.wait_for(_webcam_task, timeout=5.0)
+        await asyncio.wait_for(_webcam_state.task, timeout=5.0)
     except asyncio.TimeoutError:
         # Force cancel if it doesn't stop gracefully
-        _webcam_task.cancel()
+        _webcam_state.task.cancel()
 
-    _webcam_task = None
+    _webcam_state.task = None
 
     return {
         "success": True,
@@ -744,14 +730,12 @@ async def stop_webcam():
 )
 async def get_webcam_status():
     """Get webcam service status."""
-    global _webcam_task
-
     from src.config.settings import settings
     from src.services.webcam_service import get_webcam_service
 
     webcam_service = get_webcam_service()
 
-    is_running = _webcam_task is not None and not _webcam_task.done()
+    is_running = _webcam_state.task is not None and not _webcam_state.task.done()
 
     status_info = {
         "success": True,

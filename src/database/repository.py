@@ -46,8 +46,8 @@ class FaceRepository:
             Tuple of (faces, total_count)
         """
         # Get total count
-        count_result = await self.session.execute(select(Face))
-        total = len(list(count_result.scalars().all()))
+        count_result = await self.session.execute(select(func.count(Face.id)))
+        total = count_result.scalar_one()
 
         # Get paginated results
         result = await self.session.execute(
@@ -97,30 +97,21 @@ class FaceRepository:
         # This gives us 0-1 where 1 is identical
 
         # Build query using pgvector's cosine_distance operator
+        similarity_expr = (1 - Face.embedding_insightface.cosine_distance(embedding) / 2)
+
         query = (
             select(
                 Face,
-                (1 - Face.embedding_insightface.cosine_distance(embedding) / 2).label(
-                    "similarity"
-                ),
+                similarity_expr.label("similarity"),
             )
             .where(Face.embedding_insightface.isnot(None))
+            .where(similarity_expr >= threshold)
             .order_by(Face.embedding_insightface.cosine_distance(embedding))
             .limit(limit)
         )
 
         result = await self.session.execute(query)
-        rows = result.all()
-
-        # Filter by threshold and return
-        results = []
-        for row in rows:
-            face = row[0]
-            similarity = float(row[1])
-            if similarity >= threshold:
-                results.append((face, similarity))
-
-        return results
+        return [(row[0], float(row[1])) for row in result.all()]
 
     async def get_photos_by_user_name(
         self, user_name: str, photo_type: Optional[str] = None

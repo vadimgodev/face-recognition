@@ -14,6 +14,8 @@ from dataclasses import dataclass
 import numpy as np
 import cv2
 
+from src.config.settings import settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -129,6 +131,29 @@ class ROI:
         return intersection_area / bbox.area if bbox.area > 0 else 0.0
 
 
+def ensure_bounding_box(bbox, confidence: float = 1.0) -> BoundingBox:
+    """Convert array-like bbox to BoundingBox if needed."""
+    if isinstance(bbox, BoundingBox):
+        return bbox
+    if isinstance(bbox, (list, tuple)) and len(bbox) >= 4:
+        return BoundingBox(
+            x1=int(bbox[0]),
+            y1=int(bbox[1]),
+            x2=int(bbox[2]),
+            y2=int(bbox[3]),
+            confidence=float(bbox[4]) if len(bbox) > 4 else confidence,
+        )
+    if isinstance(bbox, np.ndarray) and len(bbox) >= 4:
+        return BoundingBox(
+            x1=int(bbox[0]),
+            y1=int(bbox[1]),
+            x2=int(bbox[2]),
+            y2=int(bbox[3]),
+            confidence=float(bbox[4]) if len(bbox) > 4 else confidence,
+        )
+    raise ValueError(f"Cannot convert to BoundingBox: {type(bbox)}")
+
+
 def crop_face_from_bbox(
     image: np.ndarray,
     bbox: BoundingBox,
@@ -206,17 +231,7 @@ def filter_faces_by_roi(
             continue
 
         # Create BoundingBox object
-        if isinstance(bbox, BoundingBox):
-            bbox_obj = bbox
-        else:
-            # Assume bbox is array-like [x1, y1, x2, y2]
-            bbox_obj = BoundingBox(
-                x1=int(bbox[0]),
-                y1=int(bbox[1]),
-                x2=int(bbox[2]),
-                y2=int(bbox[3]),
-                confidence=face.get("confidence", 1.0),
-            )
+        bbox_obj = ensure_bounding_box(bbox, confidence=face.get("confidence", 1.0))
 
         # Calculate overlap
         overlap = roi.overlap_with_bbox(bbox_obj)
@@ -290,15 +305,7 @@ def sort_faces_by_roi_proximity(
     # Calculate distance for each face
     for face in faces:
         bbox = face.get("bbox")
-        if isinstance(bbox, BoundingBox):
-            bbox_obj = bbox
-        else:
-            bbox_obj = BoundingBox(
-                x1=int(bbox[0]),
-                y1=int(bbox[1]),
-                x2=int(bbox[2]),
-                y2=int(bbox[3]),
-            )
+        bbox_obj = ensure_bounding_box(bbox)
 
         face["roi_distance"] = calculate_roi_distance(bbox_obj, roi)
 
@@ -310,8 +317,8 @@ def sort_faces_by_roi_proximity(
 
 def check_face_quality(
     face_image: np.ndarray,
-    min_size: int = 80,
-    max_blur_variance: float = 100.0,
+    min_size: Optional[int] = None,
+    max_blur_variance: Optional[float] = None,
 ) -> Tuple[bool, Dict[str, Any]]:
     """
     Check if face image meets quality requirements.
@@ -324,6 +331,11 @@ def check_face_quality(
     Returns:
         Tuple of (is_valid, quality_metrics)
     """
+    if min_size is None:
+        min_size = settings.face_quality_min_size
+    if max_blur_variance is None:
+        max_blur_variance = settings.face_quality_max_blur
+
     height, width = face_image.shape[:2]
 
     quality_metrics = {
@@ -355,12 +367,15 @@ def check_face_quality(
     mean_brightness = np.mean(gray)
     quality_metrics["brightness"] = mean_brightness
 
-    if mean_brightness < 40:
+    min_brightness = settings.face_quality_min_brightness
+    max_brightness = settings.face_quality_max_brightness
+
+    if mean_brightness < min_brightness:
         quality_metrics["is_valid"] = False
         quality_metrics["reasons"].append(
             f"Face too dark (brightness: {mean_brightness:.2f})"
         )
-    elif mean_brightness > 220:
+    elif mean_brightness > max_brightness:
         quality_metrics["is_valid"] = False
         quality_metrics["reasons"].append(
             f"Face too bright (brightness: {mean_brightness:.2f})"
@@ -455,15 +470,7 @@ def draw_faces_on_frame(
         if bbox is None:
             continue
 
-        if isinstance(bbox, BoundingBox):
-            bbox_obj = bbox
-        else:
-            bbox_obj = BoundingBox(
-                x1=int(bbox[0]),
-                y1=int(bbox[1]),
-                x2=int(bbox[2]),
-                y2=int(bbox[3]),
-            )
+        bbox_obj = ensure_bounding_box(bbox)
 
         # Draw rectangle
         cv2.rectangle(

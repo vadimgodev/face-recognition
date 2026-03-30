@@ -1,8 +1,13 @@
 """Authentication middleware for API token validation."""
+import hmac
+import logging
+
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 from src.config.settings import settings
+
+logger = logging.getLogger(__name__)
 
 
 class APITokenMiddleware(BaseHTTPMiddleware):
@@ -33,8 +38,9 @@ class APITokenMiddleware(BaseHTTPMiddleware):
         # Get token from header
         token = request.headers.get("x-face-token")
 
-        # Validate token
-        if not token or token != settings.secret_key:
+        # Validate token (constant-time comparison to prevent timing attacks)
+        if not token or not hmac.compare_digest(token, settings.secret_key):
+            logger.warning(f"Invalid auth attempt from {request.client.host if request.client else 'unknown'}")
             return JSONResponse(
                 status_code=401,
                 content={

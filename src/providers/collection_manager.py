@@ -108,8 +108,14 @@ class CollectionManager:
 
 
 # Global collection manager instance
+_collection_manager = None
+
+
 def get_collection_manager() -> CollectionManager:
     """Get the global collection manager instance."""
-    # Can be configured via environment variable
-    num_collections = getattr(settings, "num_rekognition_collections", 10)
-    return CollectionManager(num_collections=num_collections)
+    global _collection_manager
+    if _collection_manager is None:
+        # Can be configured via environment variable
+        num_collections = getattr(settings, "num_rekognition_collections", 10)
+        _collection_manager = CollectionManager(num_collections=num_collections)
+    return _collection_manager

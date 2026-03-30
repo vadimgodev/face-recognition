@@ -12,6 +12,7 @@ Much faster than AWS Rekognition for bulk operations and doesn't require API cal
 import asyncio
 import logging
 import hashlib
+import threading
 from typing import List, Optional, Tuple, Dict, Any
 import numpy as np
 from io import BytesIO
@@ -21,6 +22,7 @@ from insightface.app import FaceAnalysis
 from src.providers.base import FaceProvider, FaceMatch, EnrollmentResult, FaceMetadata
 from src.utils.face_processing import BoundingBox, convert_insightface_bbox
 from src.cache.redis_client import get_redis_client
+from src.exceptions import NoFaceDetectedError, MultipleFacesDetectedError, InvalidImageError, ProviderError
 
 logger = logging.getLogger(__name__)
 
@@ -51,38 +53,43 @@ class InsightFaceProvider(FaceProvider):
         self.det_size = det_size
         self.ctx_id = ctx_id
         self._app: Optional[FaceAnalysis] = None
+        self._lock = threading.Lock()
 
     def _get_app(self) -> FaceAnalysis:
         """Lazy load the FaceAnalysis app.
 
         Note: Models are baked into Docker image during build with correct structure,
         so no directory fixing or retry logic is needed.
+        Uses double-checked locking for thread safety.
         """
         if self._app is None:
-            logger.info(f"Loading InsightFace model: {self.model_name}")
+            with self._lock:
+                if self._app is None:  # Double-check
+                    logger.info(f"Loading InsightFace model: {self.model_name}")
 
-            # Load only detection and recognition modules (if model supports it)
-            # Some models like antelopev2 may not support module filtering
-            try:
-                self._app = FaceAnalysis(
-                    name=self.model_name,
-                    allowed_modules=["detection", "recognition"],
-                    providers=["CPUExecutionProvider"]
-                    if self.ctx_id < 0
-                    else ["CUDAExecutionProvider"],
-                )
-            except (AssertionError, KeyError):
-                # Fallback: load all modules if selective loading fails
-                logger.warning(f"Could not load {self.model_name} with selective modules, loading all modules")
-                self._app = FaceAnalysis(
-                    name=self.model_name,
-                    providers=["CPUExecutionProvider"]
-                    if self.ctx_id < 0
-                    else ["CUDAExecutionProvider"],
-                )
-            self._app.prepare(ctx_id=self.ctx_id, det_size=self.det_size)
+                    # Load only detection and recognition modules (if model supports it)
+                    # Some models like antelopev2 may not support module filtering
+                    try:
+                        app = FaceAnalysis(
+                            name=self.model_name,
+                            allowed_modules=["detection", "recognition"],
+                            providers=["CPUExecutionProvider"]
+                            if self.ctx_id < 0
+                            else ["CUDAExecutionProvider"],
+                        )
+                    except (AssertionError, KeyError):
+                        # Fallback: load all modules if selective loading fails
+                        logger.warning(f"Could not load {self.model_name} with selective modules, loading all modules")
+                        app = FaceAnalysis(
+                            name=self.model_name,
+                            providers=["CPUExecutionProvider"]
+                            if self.ctx_id < 0
+                            else ["CUDAExecutionProvider"],
+                        )
+                    app.prepare(ctx_id=self.ctx_id, det_size=self.det_size)
 
-            logger.info(f"✅ Successfully loaded InsightFace model: {self.model_name}")
+                    logger.info(f"Successfully loaded InsightFace model: {self.model_name}")
+                    self._app = app
 
         return self._app
 
@@ -150,11 +157,9 @@ class InsightFaceProvider(FaceProvider):
             faces = app.get(image_np)
 
             if len(faces) == 0:
-                raise ValueError("No face detected in image")
+                raise NoFaceDetectedError()
             if len(faces) > 1 and not allow_multiple:
-                raise ValueError(
-                    f"Multiple faces detected ({len(faces)}). Please provide image with single face."
-                )
+                raise MultipleFacesDetectedError(len(faces))
 
             # Get embedding from first face
             face = faces[0]
@@ -241,7 +246,7 @@ class InsightFaceProvider(FaceProvider):
         faces = await self.detect_multiple_faces(image_bytes)
 
         if len(faces) == 0:
-            raise ValueError("No faces detected in image")
+            raise NoFaceDetectedError()
 
         embeddings = [face["embedding"] for face in faces]
 

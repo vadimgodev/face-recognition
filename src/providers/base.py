@@ -88,12 +88,13 @@ class FaceProvider(ABC):
         pass
 
     @abstractmethod
-    async def delete_face(self, face_id: str) -> bool:
+    async def delete_face(self, face_id: str, collection_id: str = None) -> bool:
         """
         Delete a face from the provider's database.
 
         Args:
             face_id: Provider's face ID
+            collection_id: Optional collection ID override
 
         Returns:
             True if deleted successfully, False otherwise

@@ -28,21 +28,21 @@ class AccessLogger:
         if settings.access_log_output in ("file", "both"):
             self._add_file_handler()
 
-    def _add_stdout_handler(self):
-        """Add stdout handler for logging."""
-        handler = logging.StreamHandler(sys.stdout)
-
+    def _create_formatter(self) -> logging.Formatter:
+        """Create the appropriate log formatter based on settings."""
         if settings.access_log_format == "json":
-            formatter = jsonlogger.JsonFormatter(
+            return jsonlogger.JsonFormatter(
                 "%(timestamp)s %(event_type)s %(message)s",
                 timestamp=True,
             )
-        else:
-            formatter = logging.Formatter(
-                "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-            )
+        return logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
 
-        handler.setFormatter(formatter)
+    def _add_stdout_handler(self):
+        """Add stdout handler for logging."""
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(self._create_formatter())
         self.logger.addHandler(handler)
 
     def _add_file_handler(self):
@@ -51,18 +51,7 @@ class AccessLogger:
         log_path.parent.mkdir(parents=True, exist_ok=True)
 
         handler = logging.FileHandler(log_path)
-
-        if settings.access_log_format == "json":
-            formatter = jsonlogger.JsonFormatter(
-                "%(timestamp)s %(event_type)s %(message)s",
-                timestamp=True,
-            )
-        else:
-            formatter = logging.Formatter(
-                "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-            )
-
-        handler.setFormatter(formatter)
+        handler.setFormatter(self._create_formatter())
         self.logger.addHandler(handler)
 
     def log_recognition_event(
