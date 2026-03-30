@@ -328,7 +328,7 @@ class AWSRekognitionProvider(FaceProvider):
             return None
 
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             return await loop.run_in_executor(None, _compare)
         except Exception as e:
             logger.warning(f"AWS CompareFaces failed: {e}")

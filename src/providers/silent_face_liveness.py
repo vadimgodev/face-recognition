@@ -108,7 +108,7 @@ class SilentFaceLivenessProvider(LivenessProvider):
         try:
             # Run prediction in thread pool with global lock
             # OpenCV DNN has global state that's not thread-safe
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             predictor = self._get_predictor()
 
             def _predict_with_lock():

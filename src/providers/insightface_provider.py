@@ -128,7 +128,7 @@ class InsightFaceProvider(FaceProvider):
             Dict with initialization results (always successful)
         """
         # Ensure model is loaded
-        await asyncio.get_event_loop().run_in_executor(None, self._get_app)
+        await asyncio.get_running_loop().run_in_executor(None, self._get_app)
         return {"initialized": ["insightface-local"], "failed": []}
 
     async def extract_embedding(
@@ -180,7 +180,7 @@ class InsightFaceProvider(FaceProvider):
             return embedding.tolist()
 
         # Run in thread pool since InsightFace is CPU/GPU intensive
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         embedding = await loop.run_in_executor(None, _extract)
 
         # Cache the embedding (TTL: 1 hour - deterministic operation)
@@ -233,7 +233,7 @@ class InsightFaceProvider(FaceProvider):
             return results
 
         # Run in thread pool
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         faces = await loop.run_in_executor(None, _detect)
 
         return faces

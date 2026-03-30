@@ -86,7 +86,7 @@ async def lifespan(app: FastAPI):
                 detector_path=settings.liveness_detector_path,
             )
             # Trigger lazy loading by accessing the predictor
-            await asyncio.get_event_loop().run_in_executor(
+            await asyncio.get_running_loop().run_in_executor(
                 None, lambda: liveness_provider._get_predictor()
             )
             logger.info("✅ Liveness detection models loaded")
@@ -98,7 +98,7 @@ async def lifespan(app: FastAPI):
 
             insightface_provider = get_insightface_provider()
             # Trigger lazy loading
-            await asyncio.get_event_loop().run_in_executor(
+            await asyncio.get_running_loop().run_in_executor(
                 None, lambda: insightface_provider._get_app()
             )
             logger.info("✅ InsightFace models loaded")

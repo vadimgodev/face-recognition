@@ -1,43 +1,42 @@
 # Web Framework
-fastapi==0.115.5
-uvicorn[standard]==0.32.1
-pydantic==2.10.3
-pydantic-settings==2.6.1
-pydantic[email]==2.10.3
+fastapi==0.128.8
+uvicorn[standard]==0.39.0
+pydantic==2.12.5
+pydantic-settings==2.11.0
+pydantic[email]==2.12.5
 python-multipart==0.0.20
 
 # Database
-sqlalchemy==2.0.36
-asyncpg==0.30.0
-alembic==1.14.0
-pgvector==0.3.6
+sqlalchemy==2.0.48
+asyncpg==0.31.0
+alembic==1.16.5
+pgvector==0.4.2
 
 # AWS Services
-boto3==1.35.76
-botocore==1.35.76
+boto3==1.42.79
 
 # Storage Abstraction
 fs==2.4.16
 fs-s3fs==1.1.1
 
 # Caching
-redis==5.2.0
-hiredis==3.0.0
+redis==7.0.1
+hiredis==3.3.1
 
 # Image Processing
-Pillow==11.0.0
-opencv-python==4.10.0.84
+Pillow==11.3.0
+opencv-python==4.13.0.92
 
 # Face Recognition (InsightFace)
 insightface==0.7.3
-onnxruntime==1.19.2
+onnxruntime==1.24.4
 
 # Anti-Spoofing (Silent-Face)
 torch>=2.0.0
 torchvision>=0.15.0
 
 # Environment & Config
-python-dotenv==1.0.1
+python-dotenv==1.2.1
 
 # Logging
-python-json-logger==2.0.7
+python-json-logger==4.0.0

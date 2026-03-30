@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 WORKDIR /app
 
@@ -24,6 +24,10 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
     else \
         pip install --no-cache-dir -r requirements.txt; \
     fi
+
+# Patch torch for Python 3.13 AST compatibility (JIT overload body parsing issue)
+RUN find /usr/local/lib -name "_jit_internal.py" -path "*/torch/*" \
+    -exec sed -i 's/except OSError:/except (OSError, SyntaxError):/' {} + 2>/dev/null || true
 
 # Copy model download script
 COPY scripts/download_models.py /tmp/download_models.py

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import BigInteger, DateTime, Float, Index, String, Text
@@ -20,8 +19,8 @@ class Face(Base):
 
     # User information
     user_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    user_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    user_metadata: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    user_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    user_metadata: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Face provider data
     provider_name: Mapped[str] = mapped_column(
@@ -30,21 +29,21 @@ class Face(Base):
     provider_face_id: Mapped[str] = mapped_column(
         String(255), nullable=False, index=True
     )  # Provider's face ID
-    provider_collection_id: Mapped[Optional[str]] = mapped_column(
+    provider_collection_id: Mapped[str | None] = mapped_column(
         String(255), nullable=True
     )  # Collection ID (for AWS Rekognition)
 
     # Face embeddings (optional, for providers that expose it)
     # AWS Rekognition doesn't expose embeddings, but InsightFace does
-    embedding: Mapped[Optional[list[float]]] = mapped_column(
+    embedding: Mapped[list[float] | None] = mapped_column(
         Vector(512), nullable=True, comment="Generic embedding vector"
     )  # 512-dimensional vector
-    embedding_model: Mapped[Optional[str]] = mapped_column(
+    embedding_model: Mapped[str | None] = mapped_column(
         String(100), nullable=True, comment="Model used for generic embedding"
     )  # Model used for embedding
 
     # InsightFace specific embedding (for hybrid approach)
-    embedding_insightface: Mapped[Optional[list[float]]] = mapped_column(
+    embedding_insightface: Mapped[list[float] | None] = mapped_column(
         Vector(512), nullable=True, comment="InsightFace embedding for fast search"
     )  # 512-dimensional InsightFace embedding
 
@@ -53,20 +52,20 @@ class Face(Base):
     image_storage: Mapped[str] = mapped_column(String(50), nullable=False)  # 'local' or 's3'
 
     # Quality metrics
-    quality_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    confidence_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    quality_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # Auto-capture fields
     photo_type: Mapped[str] = mapped_column(
         String(20), nullable=False, default="enrolled", index=True
     )  # 'enrolled' or 'verified'
-    verified_at: Mapped[Optional[datetime]] = mapped_column(
+    verified_at: Mapped[datetime | None] = mapped_column(
         DateTime, nullable=True, comment="When photo was verified during recognition"
     )
-    verified_confidence: Mapped[Optional[float]] = mapped_column(
+    verified_confidence: Mapped[float | None] = mapped_column(
         Float, nullable=True, comment="Recognition confidence score"
     )
-    verified_by_processor: Mapped[Optional[str]] = mapped_column(
+    verified_by_processor: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         comment="Recognition processor used (e.g., 'antelopev2', 'aws_rekognition')",

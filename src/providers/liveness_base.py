@@ -12,10 +12,10 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 
-class SpoofingType(str, Enum):
+class SpoofingType(StrEnum):
     """Types of spoofing attacks that can be detected."""
 
     REAL = "real"  # Real live person

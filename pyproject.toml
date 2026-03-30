@@ -2,11 +2,11 @@
 name = "face-recognition-api"
 version = "0.1.0"
 description = "Face recognition API with enrollment and identification"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 
 [tool.black]
 line-length = 100
-target-version = ['py311']
+target-version = ['py313']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
@@ -20,7 +20,7 @@ extend-exclude = '''
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py313"
 
 [tool.ruff.lint]
 select = [
@@ -40,11 +40,9 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
-"src/database/models.py" = ["UP"]  # SQLAlchemy Mapped[] needs Optional[] at runtime
-"src/providers/liveness_base.py" = ["UP"]  # StrEnum not available in Python 3.9
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.13"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
@@ -67,6 +65,7 @@ ignore_missing_imports = true
 pythonpath = ["."]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 addopts = [
     "--cov=src",
     "--cov-report=term-missing",

@@ -12,13 +12,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.13"
 
       - name: Install linting tools
-        run: pip install 'ruff>=0.8,<1.0' 'black>=24.10,<25.0'
+        run: pip install 'ruff>=0.15,<0.16' 'black>=25.11,<26.0'
 
       - name: Run ruff
         run: ruff check src/ tests/
@@ -32,16 +32,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.13"
           cache: pip
 
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
           pip install pytest pytest-asyncio pytest-cov httpx numpy
+
+      - name: Patch torch for Python 3.13 compatibility
+        run: |
+          SITE=$(python -c "import site; print(site.getsitepackages()[0])")
+          sed -i 's/except OSError:/except (OSError, SyntaxError):/' "$SITE/torch/_jit_internal.py" 2>/dev/null || true
 
       - name: Run tests
         run: |

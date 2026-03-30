@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from pythonjsonlogger import jsonlogger
+from pythonjsonlogger.json import JsonFormatter
 
 from src.config.settings import settings
 
@@ -32,7 +32,7 @@ class AccessLogger:
     def _create_formatter(self) -> logging.Formatter:
         """Create the appropriate log formatter based on settings."""
         if settings.access_log_format == "json":
-            return jsonlogger.JsonFormatter(
+            return JsonFormatter(
                 "%(timestamp)s %(event_type)s %(message)s",
                 timestamp=True,
             )
