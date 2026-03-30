@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import logging
-from typing import Union
+
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -243,10 +245,20 @@ class Settings(BaseSettings):
     )
 
     # Face Quality Thresholds
-    face_quality_min_size: int = Field(default=80, alias="FACE_QUALITY_MIN_SIZE", description="Minimum face size in pixels")
-    face_quality_max_blur: float = Field(default=100.0, alias="FACE_QUALITY_MAX_BLUR", description="Maximum blur variance (Laplacian)")
-    face_quality_min_brightness: float = Field(default=40.0, alias="FACE_QUALITY_MIN_BRIGHTNESS", description="Minimum average brightness")
-    face_quality_max_brightness: float = Field(default=220.0, alias="FACE_QUALITY_MAX_BRIGHTNESS", description="Maximum average brightness")
+    face_quality_min_size: int = Field(
+        default=80, alias="FACE_QUALITY_MIN_SIZE", description="Minimum face size in pixels"
+    )
+    face_quality_max_blur: float = Field(
+        default=100.0,
+        alias="FACE_QUALITY_MAX_BLUR",
+        description="Maximum blur variance (Laplacian)",
+    )
+    face_quality_min_brightness: float = Field(
+        default=40.0, alias="FACE_QUALITY_MIN_BRIGHTNESS", description="Minimum average brightness"
+    )
+    face_quality_max_brightness: float = Field(
+        default=220.0, alias="FACE_QUALITY_MAX_BRIGHTNESS", description="Maximum average brightness"
+    )
 
     # Region of Interest (ROI) Settings for Door/Entrance Scenarios
     roi_enabled: bool = Field(
@@ -320,10 +332,8 @@ class Settings(BaseSettings):
     )
 
     # Security
-    secret_key: str = Field(
-        default="", alias="SECRET_KEY"
-    )
-    allowed_origins: Union[list[str], str] = Field(
+    secret_key: str = Field(default="", alias="SECRET_KEY")
+    allowed_origins: list[str] | str = Field(
         default="http://localhost:3000,http://localhost:8000",
         alias="ALLOWED_ORIGINS",
     )
@@ -340,7 +350,9 @@ class Settings(BaseSettings):
     def validate_settings(self):
         """Validate settings combinations."""
         if not self.secret_key and not self.debug:
-            logger.warning("SECRET_KEY is empty and debug mode is disabled. Authentication will reject all requests.")
+            logger.warning(
+                "SECRET_KEY is empty and debug mode is disabled. Authentication will reject all requests."
+            )
         if self.storage_backend == "s3" and not self.storage_s3_bucket:
             raise ValueError("STORAGE_S3_BUCKET must be set when STORAGE_BACKEND is 's3'")
         return self

@@ -1,6 +1,7 @@
 """Unit tests for face processing utilities."""
-import pytest
+
 import numpy as np
+
 from src.utils.face_processing import BoundingBox, crop_face_from_bbox
 
 
@@ -9,10 +10,7 @@ class TestBoundingBox:
 
     def test_bounding_box_creation(self):
         """Test creating a BoundingBox instance."""
-        bbox = BoundingBox(
-            x1=10, y1=20, x2=110, y2=120,
-            confidence=0.95, face_id="test_1"
-        )
+        bbox = BoundingBox(x1=10, y1=20, x2=110, y2=120, confidence=0.95, face_id="test_1")
         assert bbox.x1 == 10
         assert bbox.y1 == 20
         assert bbox.x2 == 110
@@ -55,7 +53,7 @@ class TestBoundingBox:
         # Should be roughly 100x100 (bbox dimensions)
         assert cropped.shape[0] == 100  # height
         assert cropped.shape[1] == 100  # width
-        assert cropped.shape[2] == 3    # RGB channels
+        assert cropped.shape[2] == 3  # RGB channels
 
     def test_crop_face_with_padding(self):
         """Test cropping with padding."""

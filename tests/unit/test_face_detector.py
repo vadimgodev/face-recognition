@@ -1,7 +1,9 @@
 """Unit tests for face detector."""
-import pytest
+
 import numpy as np
-from src.utils.face_detector import FastFaceDetector, DetectionMethod, create_face_detector
+import pytest
+
+from src.utils.face_detector import DetectionMethod, FastFaceDetector, create_face_detector
 from src.utils.face_processing import BoundingBox
 
 
@@ -50,10 +52,7 @@ class TestFaceDetector:
 
     def test_min_face_size_filtering(self):
         """Test that faces smaller than min_face_size are filtered."""
-        detector = FastFaceDetector(
-            method=DetectionMethod.HAAR_CASCADE,
-            min_face_size=(200, 200)
-        )
+        detector = FastFaceDetector(method=DetectionMethod.HAAR_CASCADE, min_face_size=(200, 200))
         # Very large min_face_size should filter out most detections
         # on typical webcam-sized images
         assert detector.min_face_size == (200, 200)

@@ -8,25 +8,26 @@ Thin orchestration layer that composes focused sub-services:
 - MultiFaceService: Multi-face detection and recognition
 """
 
+from __future__ import annotations
+
 import hashlib
+import logging
 from datetime import datetime
-from typing import List, Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.cache.redis_client import get_redis_client
+from src.config.settings import settings
 from src.database.models import Face
 from src.database.repository import FaceRepository
-from src.providers.factory import get_insightface_provider, get_aws_provider
 from src.providers.collection_manager import get_collection_manager
-from src.storage.factory import get_storage
-from src.config.settings import settings
-from src.utils.face_detector import create_face_detector
-from src.cache.redis_client import get_redis_client
-from src.services.template_service import TemplateService
-from src.services.recognition_strategies import create_strategy
+from src.providers.factory import get_aws_provider, get_insightface_provider
 from src.services.auto_capture_service import AutoCaptureService
 from src.services.multiface_service import MultiFaceService
-import logging
+from src.services.recognition_strategies import create_strategy
+from src.services.template_service import TemplateService
+from src.storage.factory import get_storage
+from src.utils.face_detector import create_face_detector
 
 logger = logging.getLogger(__name__)
 
@@ -115,8 +116,8 @@ class HybridFaceService:
         self,
         image_data: bytes,
         user_name: str,
-        user_email: Optional[str] = None,
-        additional_metadata: Optional[dict] = None,
+        user_email: str | None = None,
+        additional_metadata: dict | None = None,
     ) -> Face:
         """
         Enroll a new face with hybrid providers.
@@ -141,9 +142,7 @@ class HybridFaceService:
         # Extract InsightFace embedding
         insightface_embedding = None
         if self.insightface_provider:
-            insightface_embedding = await self.insightface_provider.extract_embedding(
-                image_data
-            )
+            insightface_embedding = await self.insightface_provider.extract_embedding(image_data)
 
         # Index in AWS Rekognition (if needed and if not smart_hybrid mode)
         aws_face_id = None
@@ -171,9 +170,7 @@ class HybridFaceService:
 
             # Get collection ID from collection manager
             collection_manager = get_collection_manager()
-            aws_collection_id = collection_manager.get_collection_for_user(
-                user_id_for_provider
-            )
+            aws_collection_id = collection_manager.get_collection_for_user(user_id_for_provider)
 
         # Generate unique image path
         image_hash = hashlib.sha256(image_data).hexdigest()[:16]
@@ -219,7 +216,7 @@ class HybridFaceService:
         image_data: bytes,
         max_results: int = 10,
         confidence_threshold: float = 0.8,
-    ) -> Tuple[List[Tuple[Face, float, bool, str]], str]:
+    ) -> tuple[list[tuple[Face, float, bool, str]], str]:
         """
         Recognize face using hybrid approach.
 
@@ -264,12 +261,14 @@ class HybridFaceService:
         results_with_metadata = []
         for i, (face, score, aws_used) in enumerate(results_with_aws_flag):
             match_processor = _match_processor_name(aws_used)
-            results_with_metadata.append((
-                face,
-                score,
-                photo_captured if i == 0 else False,
-                match_processor,
-            ))
+            results_with_metadata.append(
+                (
+                    face,
+                    score,
+                    photo_captured if i == 0 else False,
+                    match_processor,
+                )
+            )
 
         return results_with_metadata, base_processor
 
@@ -278,7 +277,7 @@ class HybridFaceService:
         image_data: bytes,
         max_results_per_face: int = 5,
         confidence_threshold: float = 0.8,
-    ) -> Tuple[List[dict], str]:
+    ) -> tuple[list[dict], str]:
         """
         Recognize multiple faces in a single image.
 
@@ -308,13 +307,11 @@ class HybridFaceService:
     # CRUD / utility methods (kept here as they are already concise)
     # ------------------------------------------------------------------
 
-    async def get_face_by_id(self, face_id: int) -> Optional[Face]:
+    async def get_face_by_id(self, face_id: int) -> Face | None:
         """Get face by ID."""
         return await self.repository.get_by_id(face_id)
 
-    async def list_faces(
-        self, limit: int = 100, offset: int = 0
-    ) -> Tuple[List[Face], int]:
+    async def list_faces(self, limit: int = 100, offset: int = 0) -> tuple[list[Face], int]:
         """List all faces with pagination."""
         return await self.repository.list_all(limit, offset)
 
@@ -363,7 +360,7 @@ class HybridFaceService:
         image_data = await self.storage.read(face.image_path)
         return image_data
 
-    async def get_user_photos(self, user_name: str) -> List[Face]:
+    async def get_user_photos(self, user_name: str) -> list[Face]:
         """
         Get all photos (enrolled + verified) for a user.
 

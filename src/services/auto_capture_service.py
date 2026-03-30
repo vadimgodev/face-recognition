@@ -6,13 +6,12 @@ as "verified" photos using a FIFO stack per user.
 """
 
 import hashlib
+import logging
 from datetime import datetime
-from typing import Optional
 
 from src.config.settings import settings
 from src.database.models import Face
 from src.database.repository import FaceRepository
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +19,7 @@ logger = logging.getLogger(__name__)
 class AutoCaptureService:
     """Manages automatic capture of verified face photos (FIFO stack)."""
 
-    def __init__(self, repository: FaceRepository, storage,
-                 insightface_provider=None):
+    def __init__(self, repository: FaceRepository, storage, insightface_provider=None):
         """
         Args:
             repository: FaceRepository for DB access
@@ -64,15 +62,11 @@ class AutoCaptureService:
 
         try:
             # Check verified photos count
-            verified_count = await self.repository.get_verified_photos_count(
-                matched_face.user_name
-            )
+            verified_count = await self.repository.get_verified_photos_count(matched_face.user_name)
 
             # If at max, delete oldest (FIFO)
             if verified_count >= settings.auto_capture_max_verified_photos:
-                oldest = await self.repository.get_oldest_verified_photo(
-                    matched_face.user_name
-                )
+                oldest = await self.repository.get_oldest_verified_photo(matched_face.user_name)
                 if oldest:
                     try:
                         await self.storage.delete(oldest.image_path)
@@ -83,16 +77,12 @@ class AutoCaptureService:
             # Extract embedding from verified photo
             embedding = None
             if self.insightface_provider:
-                embedding = await self.insightface_provider.extract_embedding(
-                    image_data
-                )
+                embedding = await self.insightface_provider.extract_embedding(image_data)
 
             # Generate unique image path
             image_hash = hashlib.sha256(image_data).hexdigest()[:16]
             timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-            image_filename = (
-                f"{matched_face.user_name}_verified_{timestamp}_{image_hash}.jpg"
-            )
+            image_filename = f"{matched_face.user_name}_verified_{timestamp}_{image_hash}.jpg"
             image_path = f"faces/{matched_face.user_name}/{image_filename}"
 
             # Save image to storage

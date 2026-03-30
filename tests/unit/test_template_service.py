@@ -1,14 +1,16 @@
 """Unit tests for TemplateService."""
-import pytest
-import numpy as np
+
 from unittest.mock import AsyncMock, MagicMock
 
-from src.services.template_service import TemplateService
+import numpy as np
+import pytest
 
+from src.services.template_service import TemplateService
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_face(
     user_name: str = "alice",
@@ -36,6 +38,7 @@ def _normalized_vector(dim: int = 512, seed: int = 0):
 # ---------------------------------------------------------------------------
 # compute_cosine_similarity
 # ---------------------------------------------------------------------------
+
 
 class TestComputeCosineSimilarity:
     """Tests for the static cosine similarity method."""
@@ -87,6 +90,7 @@ class TestComputeCosineSimilarity:
 # ---------------------------------------------------------------------------
 # compute_template_results
 # ---------------------------------------------------------------------------
+
 
 class TestComputeTemplateResults:
     """Tests for compute_template_results with mocked repository."""
@@ -218,9 +222,7 @@ class TestComputeTemplateResults:
         face_close = _make_face("close_user", embedding=emb_close, face_id=1)
         face_far = _make_face("far_user", embedding=emb_far, face_id=2)
 
-        mock_repo.get_photos_by_user_names_batch.return_value = [
-            face_close, face_far
-        ]
+        mock_repo.get_photos_by_user_names_batch.return_value = [face_close, face_far]
 
         result = await service.compute_template_results(
             query_embedding=emb_query,
@@ -255,6 +257,7 @@ class TestComputeTemplateResults:
 # ---------------------------------------------------------------------------
 # get_representative_face
 # ---------------------------------------------------------------------------
+
 
 class TestGetRepresentativeFace:
     """Tests for the static get_representative_face method."""

@@ -1,5 +1,6 @@
+from __future__ import annotations
+
 import hashlib
-from typing import List, Optional
 from dataclasses import dataclass
 
 from src.config.settings import settings
@@ -35,12 +36,10 @@ class CollectionManager:
             base_collection_id: Base name for collections (default: from settings)
         """
         self.num_collections = num_collections
-        self.base_collection_id = (
-            base_collection_id or settings.aws_rekognition_collection_id
-        )
+        self.base_collection_id = base_collection_id or settings.aws_rekognition_collection_id
         self.collections = self._generate_collections()
 
-    def _generate_collections(self) -> List[CollectionInfo]:
+    def _generate_collections(self) -> list[CollectionInfo]:
         """Generate collection info for all shards."""
         collections = []
         for i in range(self.num_collections):
@@ -70,11 +69,11 @@ class CollectionManager:
 
         return self.collections[shard_index].collection_id
 
-    def get_all_collection_ids(self) -> List[str]:
+    def get_all_collection_ids(self) -> list[str]:
         """Get all collection IDs."""
         return [coll.collection_id for coll in self.collections if coll.is_active]
 
-    def get_collection_by_index(self, index: int) -> Optional[str]:
+    def get_collection_by_index(self, index: int) -> str | None:
         """Get collection ID by shard index."""
         if 0 <= index < len(self.collections):
             return self.collections[index].collection_id

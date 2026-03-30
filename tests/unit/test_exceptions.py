@@ -1,17 +1,18 @@
 """Unit tests for the custom exception hierarchy."""
+
 import pytest
 
 from src.exceptions import (
-    FaceRecognitionError,
+    ConfigurationError,
     FaceNotFoundError,
-    NoFaceDetectedError,
-    MultipleFacesDetectedError,
+    FaceRecognitionError,
+    InvalidImageError,
     LivenessCheckFailedError,
+    MultipleFacesDetectedError,
+    NoFaceDetectedError,
     ProviderError,
     StorageError,
     StoragePathError,
-    InvalidImageError,
-    ConfigurationError,
 )
 
 
@@ -109,24 +110,18 @@ class TestLivenessCheckFailedError:
     """Tests for LivenessCheckFailedError."""
 
     def test_status_code(self):
-        err = LivenessCheckFailedError(
-            confidence=0.123, spoofing_type="print", threshold=0.5
-        )
+        err = LivenessCheckFailedError(confidence=0.123, spoofing_type="print", threshold=0.5)
         assert err.status_code == 400
 
     def test_message_format(self):
-        err = LivenessCheckFailedError(
-            confidence=0.456, spoofing_type="replay", threshold=0.7
-        )
+        err = LivenessCheckFailedError(confidence=0.456, spoofing_type="replay", threshold=0.7)
         assert "replay" in err.message
         assert "0.456" in err.message
         assert "0.7" in err.message
         assert "Liveness check failed" in err.message
 
     def test_attributes_stored(self):
-        err = LivenessCheckFailedError(
-            confidence=0.3, spoofing_type="mask", threshold=0.5
-        )
+        err = LivenessCheckFailedError(confidence=0.3, spoofing_type="mask", threshold=0.5)
         assert err.confidence == 0.3
         assert err.spoofing_type == "mask"
         assert err.threshold == 0.5
@@ -246,9 +241,9 @@ class TestInheritanceHierarchy:
             InvalidImageError,
             ConfigurationError,
         ]:
-            assert issubclass(cls, FaceRecognitionError), (
-                f"{cls.__name__} does not inherit from FaceRecognitionError"
-            )
+            assert issubclass(
+                cls, FaceRecognitionError
+            ), f"{cls.__name__} does not inherit from FaceRecognitionError"
 
     def test_storage_path_extends_storage(self):
         assert issubclass(StoragePathError, StorageError)

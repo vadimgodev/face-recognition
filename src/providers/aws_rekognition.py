@@ -1,18 +1,19 @@
-from typing import List, Optional
+from __future__ import annotations
+
 import logging
 
 import boto3
 from botocore.exceptions import ClientError
 
+from src.config.settings import settings
+from src.exceptions import InvalidImageError, NoFaceDetectedError, ProviderError
 from src.providers.base import (
-    FaceProvider,
-    FaceMatch,
     EnrollmentResult,
+    FaceMatch,
     FaceMetadata,
+    FaceProvider,
 )
 from src.providers.collection_manager import get_collection_manager
-from src.config.settings import settings
-from src.exceptions import NoFaceDetectedError, InvalidImageError, ProviderError
 
 logger = logging.getLogger(__name__)
 
@@ -101,9 +102,7 @@ class AWSRekognitionProvider(FaceProvider):
 
         return results
 
-    async def enroll_face(
-        self, image_bytes: bytes, metadata: FaceMetadata
-    ) -> EnrollmentResult:
+    async def enroll_face(self, image_bytes: bytes, metadata: FaceMetadata) -> EnrollmentResult:
         """
         Enroll a face using AWS Rekognition IndexFaces API.
 
@@ -159,9 +158,7 @@ class AWSRekognitionProvider(FaceProvider):
 
             # Calculate quality score from face detail
             quality = face_record.get("FaceDetail", {}).get("Quality", {})
-            quality_score = (
-                quality.get("Brightness", 50) + quality.get("Sharpness", 50)
-            ) / 2
+            quality_score = (quality.get("Brightness", 50) + quality.get("Sharpness", 50)) / 2
 
             return EnrollmentResult(
                 face_id=face_id,
@@ -181,8 +178,12 @@ class AWSRekognitionProvider(FaceProvider):
                 raise ProviderError("aws_rekognition", str(e)) from e
 
     async def recognize_face(
-        self, image_bytes: bytes, max_results: int = 10, confidence_threshold: float = 0.8, user_id: Optional[str] = None
-    ) -> List[FaceMatch]:
+        self,
+        image_bytes: bytes,
+        max_results: int = 10,
+        confidence_threshold: float = 0.8,
+        user_id: str | None = None,
+    ) -> list[FaceMatch]:
         """
         Recognize faces using AWS Rekognition SearchFacesByImage API.
 
@@ -282,7 +283,7 @@ class AWSRekognitionProvider(FaceProvider):
         except ClientError as e:
             raise Exception(f"Failed to delete face: {e}") from e
 
-    async def get_face_details(self, face_id: str) -> Optional[dict]:
+    async def get_face_details(self, face_id: str) -> dict | None:
         """
         Get face details. AWS Rekognition doesn't have a direct API for this,
         so we return basic information.
@@ -291,9 +292,7 @@ class AWSRekognitionProvider(FaceProvider):
             # AWS Rekognition doesn't have a direct "get face" API
             # We can use list_faces with a token, but it's not efficient
             # This is a limitation of AWS Rekognition
-            response = self.client.list_faces(
-                CollectionId=self.collection_id, MaxResults=1000
-            )
+            response = self.client.list_faces(CollectionId=self.collection_id, MaxResults=1000)
 
             for face in response.get("Faces", []):
                 if face["FaceId"] == face_id:
@@ -309,8 +308,9 @@ class AWSRekognitionProvider(FaceProvider):
         except ClientError as e:
             raise Exception(f"Failed to get face details: {e}") from e
 
-    async def compare_faces(self, source_bytes: bytes, target_bytes: bytes,
-                             similarity_threshold: float = 0.0) -> Optional[float]:
+    async def compare_faces(
+        self, source_bytes: bytes, target_bytes: bytes, similarity_threshold: float = 0.0
+    ) -> float | None:
         """Compare two face images using AWS CompareFaces.
 
         Returns similarity score (0.0-1.0) or None if no match.
@@ -319,12 +319,12 @@ class AWSRekognitionProvider(FaceProvider):
 
         def _compare():
             response = self.client.compare_faces(
-                SourceImage={'Bytes': source_bytes},
-                TargetImage={'Bytes': target_bytes},
+                SourceImage={"Bytes": source_bytes},
+                TargetImage={"Bytes": target_bytes},
                 SimilarityThreshold=similarity_threshold * 100,
             )
-            if response.get('FaceMatches'):
-                return response['FaceMatches'][0]['Similarity'] / 100.0
+            if response.get("FaceMatches"):
+                return response["FaceMatches"][0]["Similarity"] / 100.0
             return None
 
         try:

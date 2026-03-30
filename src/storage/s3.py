@@ -8,7 +8,13 @@ from src.storage.base import StorageBackend
 class S3StorageBackend(StorageBackend):
     """S3 storage using PyFilesystem2 S3FS."""
 
-    def __init__(self, bucket_name: str, region: str, aws_access_key_id: str = None, aws_secret_access_key: str = None):
+    def __init__(
+        self,
+        bucket_name: str,
+        region: str,
+        aws_access_key_id: str = None,
+        aws_secret_access_key: str = None,
+    ):
         """
         Initialize S3 storage.
 

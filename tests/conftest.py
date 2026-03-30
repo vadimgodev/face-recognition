@@ -1,13 +1,14 @@
 """Shared pytest configuration and fixtures."""
-import pytest
-import sys
+
 import os
+import sys
 import tempfile
-from pathlib import Path
 from importlib import reload
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import numpy as np
+import pytest
 
 # Add src to Python path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -29,11 +30,11 @@ def setup_test_environment():
 
     # Reload settings to pick up new environment variables
     import src.config.settings as settings_module
+
     reload(settings_module)
 
     # Update the global settings object
-    from src.config import settings
-    reload(sys.modules['src.config.settings'])
+    reload(sys.modules["src.config.settings"])
 
     yield
 

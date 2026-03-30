@@ -2,7 +2,7 @@
 name = "face-recognition-api"
 version = "0.1.0"
 description = "Face recognition API with enrollment and identification"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 
 [tool.black]
 line-length = 100
@@ -40,6 +40,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
+"src/database/models.py" = ["UP007"]  # SQLAlchemy Mapped[] needs Optional[], not X | None
 
 [tool.mypy]
 python_version = "3.11"

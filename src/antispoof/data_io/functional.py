@@ -1,27 +1,26 @@
-# -*- coding: utf-8 -*-
 # @Time : 20-6-4 下午6:18
 # @Author : zhuying
 # @Company : Minivision
 # @File : functional.py
 # @Software : PyCharm
 
-from __future__ import division
 import torch
-from PIL import Image, ImageOps, ImageEnhance
+from PIL import Image, ImageEnhance, ImageOps
+
 try:
     import accimage
 except ImportError:
     accimage = None
-import numpy as np
-import numbers
-import types
 import collections
+import numbers
 import warnings
+
+import numpy as np
 
 
 def _is_pil_image(img):
     if accimage is not None:
-        return isinstance(img, (Image.Image, accimage.Image))
+        return isinstance(img, Image.Image | accimage.Image)
     else:
         return isinstance(img, Image.Image)
 
@@ -45,8 +44,8 @@ def to_tensor(pic):
     Returns:
         Tensor: Converted image.
     """
-    if not(_is_pil_image(pic) or _is_numpy_image(pic)):
-        raise TypeError('pic should be PIL Image or ndarray. Got {}'.format(type(pic)))
+    if not (_is_pil_image(pic) or _is_numpy_image(pic)):
+        raise TypeError(f"pic should be PIL Image or ndarray. Got {type(pic)}")
 
     if isinstance(pic, np.ndarray):
         # handle numpy array
@@ -64,16 +63,16 @@ def to_tensor(pic):
         return torch.from_numpy(nppic)
 
     # handle PIL Image
-    if pic.mode == 'I':
+    if pic.mode == "I":
         img = torch.from_numpy(np.array(pic, np.int32, copy=False))
-    elif pic.mode == 'I;16':
+    elif pic.mode == "I;16":
         img = torch.from_numpy(np.array(pic, np.int16, copy=False))
     else:
         img = torch.ByteTensor(torch.ByteStorage.from_buffer(pic.tobytes()))
     # PIL image mode: 1, L, P, I, F, RGB, YCbCr, RGBA, CMYK
-    if pic.mode == 'YCbCr':
+    if pic.mode == "YCbCr":
         nchannel = 3
-    elif pic.mode == 'I;16':
+    elif pic.mode == "I;16":
         nchannel = 1
     else:
         nchannel = len(pic.mode)
@@ -102,8 +101,8 @@ def to_pil_image(pic, mode=None):
     Returns:
         PIL Image: Image converted to PIL Image.
     """
-    if not(_is_numpy_image(pic) or _is_tensor_image(pic)):
-        raise TypeError('pic should be Tensor or ndarray. Got {}.'.format(type(pic)))
+    if not (_is_numpy_image(pic) or _is_tensor_image(pic)):
+        raise TypeError(f"pic should be Tensor or ndarray. Got {type(pic)}.")
 
     npimg = pic
     if isinstance(pic, torch.FloatTensor):
@@ -112,41 +111,43 @@ def to_pil_image(pic, mode=None):
         npimg = np.transpose(pic.numpy(), (1, 2, 0))
 
     if not isinstance(npimg, np.ndarray):
-        raise TypeError('Input pic must be a torch.Tensor or NumPy ndarray, ' +
-                        'not {}'.format(type(npimg)))
+        raise TypeError(
+            "Input pic must be a torch.Tensor or NumPy ndarray, " + f"not {type(npimg)}"
+        )
 
     if npimg.shape[2] == 1:
         expected_mode = None
         npimg = npimg[:, :, 0]
         if npimg.dtype == np.uint8:
-            expected_mode = 'L'
+            expected_mode = "L"
         if npimg.dtype == np.int16:
-            expected_mode = 'I;16'
+            expected_mode = "I;16"
         if npimg.dtype == np.int32:
-            expected_mode = 'I'
+            expected_mode = "I"
         elif npimg.dtype == np.float32:
-            expected_mode = 'F'
+            expected_mode = "F"
         if mode is not None and mode != expected_mode:
-            raise ValueError("Incorrect mode ({}) supplied for input type {}. Should be {}"
-                             .format(mode, np.dtype, expected_mode))
+            raise ValueError(
+                f"Incorrect mode ({mode}) supplied for input type {np.dtype}. Should be {expected_mode}"
+            )
         mode = expected_mode
 
     elif npimg.shape[2] == 4:
-        permitted_4_channel_modes = ['RGBA', 'CMYK']
+        permitted_4_channel_modes = ["RGBA", "CMYK"]
         if mode is not None and mode not in permitted_4_channel_modes:
-            raise ValueError("Only modes {} are supported for 4D inputs".format(permitted_4_channel_modes))
+            raise ValueError(f"Only modes {permitted_4_channel_modes} are supported for 4D inputs")
 
         if mode is None and npimg.dtype == np.uint8:
-            mode = 'RGBA'
+            mode = "RGBA"
     else:
-        permitted_3_channel_modes = ['RGB', 'YCbCr', 'HSV']
+        permitted_3_channel_modes = ["RGB", "YCbCr", "HSV"]
         if mode is not None and mode not in permitted_3_channel_modes:
-            raise ValueError("Only modes {} are supported for 3D inputs".format(permitted_3_channel_modes))
+            raise ValueError(f"Only modes {permitted_3_channel_modes} are supported for 3D inputs")
         if mode is None and npimg.dtype == np.uint8:
-            mode = 'RGB'
+            mode = "RGB"
 
     if mode is None:
-        raise TypeError('Input type {} is not supported'.format(npimg.dtype))
+        raise TypeError(f"Input type {npimg.dtype} is not supported")
 
     return Image.fromarray(npimg, mode=mode)
 
@@ -165,9 +166,9 @@ def normalize(tensor, mean, std):
         Tensor: Normalized Tensor image.
     """
     if not _is_tensor_image(tensor):
-        raise TypeError('tensor is not a torch image.')
+        raise TypeError("tensor is not a torch image.")
 
-    for t, m, s in zip(tensor, mean, std):
+    for t, m, s in zip(tensor, mean, std, strict=False):
         t.sub_(m).div_(s)
     return tensor
 
@@ -189,9 +190,9 @@ def resize(img, size, interpolation=Image.BILINEAR):
         PIL Image: Resized image.
     """
     if not _is_pil_image(img):
-        raise TypeError('img should be PIL Image. Got {}'.format(type(img)))
+        raise TypeError(f"img should be PIL Image. Got {type(img)}")
     if not (isinstance(size, int) or (isinstance(size, collections.Iterable) and len(size) == 2)):
-        raise TypeError('Got inappropriate size arg: {}'.format(size))
+        raise TypeError(f"Got inappropriate size arg: {size}")
 
     if isinstance(size, int):
         w, h = img.size
@@ -210,8 +211,11 @@ def resize(img, size, interpolation=Image.BILINEAR):
 
 
 def scale(*args, **kwargs):
-    warnings.warn("The use of the transforms.Scale transform is deprecated, " +
-                  "please use transforms.Resize instead.")
+    warnings.warn(
+        "The use of the transforms.Scale transform is deprecated, "
+        + "please use transforms.Resize instead.",
+        stacklevel=2,
+    )
     return resize(*args, **kwargs)
 
 
@@ -232,16 +236,18 @@ def pad(img, padding, fill=0):
         PIL Image: Padded image.
     """
     if not _is_pil_image(img):
-        raise TypeError('img should be PIL Image. Got {}'.format(type(img)))
+        raise TypeError(f"img should be PIL Image. Got {type(img)}")
 
-    if not isinstance(padding, (numbers.Number, tuple)):
-        raise TypeError('Got inappropriate padding arg')
-    if not isinstance(fill, (numbers.Number, str, tuple)):
-        raise TypeError('Got inappropriate fill arg')
+    if not isinstance(padding, numbers.Number | tuple):
+        raise TypeError("Got inappropriate padding arg")
+    if not isinstance(fill, numbers.Number | str | tuple):
+        raise TypeError("Got inappropriate fill arg")
 
     if isinstance(padding, collections.Sequence) and len(padding) not in [2, 4]:
-        raise ValueError("Padding must be an int or a 2, or 4 element tuple, not a " +
-                         "{} element tuple".format(len(padding)))
+        raise ValueError(
+            "Padding must be an int or a 2, or 4 element tuple, not a "
+            + f"{len(padding)} element tuple"
+        )
 
     return ImageOps.expand(img, border=padding, fill=fill)
 
@@ -260,7 +266,7 @@ def crop(img, i, j, h, w):
         PIL Image: Cropped image.
     """
     if not _is_pil_image(img):
-        raise TypeError('img should be PIL Image. Got {}'.format(type(img)))
+        raise TypeError(f"img should be PIL Image. Got {type(img)}")
 
     return img.crop((j, i, j + w, i + h))
 
@@ -270,8 +276,8 @@ def center_crop(img, output_size):
         output_size = (int(output_size), int(output_size))
     w, h = img.size
     th, tw = output_size
-    i = int(round((h - th) / 2.))
-    j = int(round((w - tw) / 2.))
+    i = int(round((h - th) / 2.0))
+    j = int(round((w - tw) / 2.0))
     return crop(img, i, j, th, tw)
 
 
@@ -292,7 +298,7 @@ def resized_crop(img, i, j, h, w, size, interpolation=Image.BILINEAR):
     Returns:
         PIL Image: Cropped image.
     """
-    assert _is_pil_image(img), 'img should be PIL Image'
+    assert _is_pil_image(img), "img should be PIL Image"
     img = crop(img, i, j, h, w)
     img = resize(img, size, interpolation)
     return img
@@ -308,7 +314,7 @@ def hflip(img):
         PIL Image:  Horizontall flipped image.
     """
     if not _is_pil_image(img):
-        raise TypeError('img should be PIL Image. Got {}'.format(type(img)))
+        raise TypeError(f"img should be PIL Image. Got {type(img)}")
 
     return img.transpose(Image.FLIP_LEFT_RIGHT)
 
@@ -323,7 +329,7 @@ def vflip(img):
         PIL Image:  Vertically flipped image.
     """
     if not _is_pil_image(img):
-        raise TypeError('img should be PIL Image. Got {}'.format(type(img)))
+        raise TypeError(f"img should be PIL Image. Got {type(img)}")
 
     return img.transpose(Image.FLIP_TOP_BOTTOM)
 
@@ -351,8 +357,7 @@ def five_crop(img, size):
     w, h = img.size
     crop_h, crop_w = size
     if crop_w > w or crop_h > h:
-        raise ValueError("Requested crop size {} is bigger than input size {}".format(size,
-                                                                                      (h, w)))
+        raise ValueError(f"Requested crop size {size} is bigger than input size {(h, w)}")
     tl = img.crop((0, 0, crop_w, crop_h))
     tr = img.crop((w - crop_w, 0, w, crop_h))
     bl = img.crop((0, h - crop_h, crop_w, h))
@@ -410,7 +415,7 @@ def adjust_brightness(img, brightness_factor):
         PIL Image: Brightness adjusted image.
     """
     if not _is_pil_image(img):
-        raise TypeError('img should be PIL Image. Got {}'.format(type(img)))
+        raise TypeError(f"img should be PIL Image. Got {type(img)}")
 
     enhancer = ImageEnhance.Brightness(img)
     img = enhancer.enhance(brightness_factor)
@@ -430,7 +435,7 @@ def adjust_contrast(img, contrast_factor):
         PIL Image: Contrast adjusted image.
     """
     if not _is_pil_image(img):
-        raise TypeError('img should be PIL Image. Got {}'.format(type(img)))
+        raise TypeError(f"img should be PIL Image. Got {type(img)}")
 
     enhancer = ImageEnhance.Contrast(img)
     img = enhancer.enhance(contrast_factor)
@@ -450,7 +455,7 @@ def adjust_saturation(img, saturation_factor):
         PIL Image: Saturation adjusted image.
     """
     if not _is_pil_image(img):
-        raise TypeError('img should be PIL Image. Got {}'.format(type(img)))
+        raise TypeError(f"img should be PIL Image. Got {type(img)}")
 
     enhancer = ImageEnhance.Color(img)
     img = enhancer.enhance(saturation_factor)
@@ -480,25 +485,25 @@ def adjust_hue(img, hue_factor):
     Returns:
         PIL Image: Hue adjusted image.
     """
-    if not(-0.5 <= hue_factor <= 0.5):
-        raise ValueError('hue_factor is not in [-0.5, 0.5].'.format(hue_factor))
+    if not (-0.5 <= hue_factor <= 0.5):
+        raise ValueError("hue_factor is not in [-0.5, 0.5].")
 
     if not _is_pil_image(img):
-        raise TypeError('img should be PIL Image. Got {}'.format(type(img)))
+        raise TypeError(f"img should be PIL Image. Got {type(img)}")
 
     input_mode = img.mode
-    if input_mode in {'L', '1', 'I', 'F'}:
+    if input_mode in {"L", "1", "I", "F"}:
         return img
 
-    h, s, v = img.convert('HSV').split()
+    h, s, v = img.convert("HSV").split()
 
     np_h = np.array(h, dtype=np.uint8)
     # uint8 addition take cares of rotation across boundaries
-    with np.errstate(over='ignore'):
+    with np.errstate(over="ignore"):
         np_h += np.uint8(hue_factor * 255)
-    h = Image.fromarray(np_h, 'L')
+    h = Image.fromarray(np_h, "L")
 
-    img = Image.merge('HSV', (h, s, v)).convert(input_mode)
+    img = Image.merge("HSV", (h, s, v)).convert(input_mode)
     return img
 
 
@@ -520,19 +525,19 @@ def adjust_gamma(img, gamma, gain=1):
         gain (float): The constant multiplier.
     """
     if not _is_pil_image(img):
-        raise TypeError('img should be PIL Image. Got {}'.format(type(img)))
+        raise TypeError(f"img should be PIL Image. Got {type(img)}")
 
     if gamma < 0:
-        raise ValueError('Gamma should be a non-negative real number')
+        raise ValueError("Gamma should be a non-negative real number")
 
     input_mode = img.mode
-    img = img.convert('RGB')
+    img = img.convert("RGB")
 
     np_img = np.array(img, dtype=np.float32)
     np_img = 255 * gain * ((np_img / 255) ** gamma)
     np_img = np.uint8(np.clip(np_img, 0, 255))
 
-    img = Image.fromarray(np_img, 'RGB').convert(input_mode)
+    img = Image.fromarray(np_img, "RGB").convert(input_mode)
     return img
 
 
@@ -557,7 +562,7 @@ def rotate(img, angle, resample=False, expand=False, center=None):
     """
 
     if not _is_pil_image(img):
-        raise TypeError('img should be PIL Image. Got {}'.format(type(img)))
+        raise TypeError(f"img should be PIL Image. Got {type(img)}")
 
     return img.rotate(angle, resample, expand, center)
 
@@ -574,16 +579,16 @@ def to_grayscale(img, num_output_channels=1):
                     if num_output_channels == 3 : returned image is 3 channel with r == g == b
     """
     if not _is_pil_image(img):
-        raise TypeError('img should be PIL Image. Got {}'.format(type(img)))
+        raise TypeError(f"img should be PIL Image. Got {type(img)}")
 
     if num_output_channels == 1:
-        img = img.convert('L')
+        img = img.convert("L")
     elif num_output_channels == 3:
-        img = img.convert('L')
+        img = img.convert("L")
         np_img = np.array(img, dtype=np.uint8)
         np_img = np.dstack([np_img, np_img, np_img])
-        img = Image.fromarray(np_img, 'RGB')
+        img = Image.fromarray(np_img, "RGB")
     else:
-        raise ValueError('num_output_channels should be either 1 or 3')
+        raise ValueError("num_output_channels should be either 1 or 3")
 
     return img

@@ -1,22 +1,22 @@
-import hashlib
-from datetime import datetime
-from typing import List, Optional
-import logging
+from __future__ import annotations
 
+import hashlib
+import logging
+from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-logger = logging.getLogger(__name__)
-
+from src.cache.redis_client import get_redis_client
+from src.config.settings import settings
 from src.database.models import Face
 from src.database.repository import FaceRepository
-from src.providers.base import FaceProvider, FaceMetadata
-from src.providers.factory import get_face_provider
+from src.providers.base import FaceMetadata, FaceProvider
 from src.providers.collection_manager import get_collection_manager
+from src.providers.factory import get_face_provider
 from src.storage.base import StorageBackend
 from src.storage.factory import get_storage
-from src.config.settings import settings
-from src.cache.redis_client import get_redis_client
+
+logger = logging.getLogger(__name__)
 
 
 class FaceService:
@@ -54,6 +54,7 @@ class FaceService:
         if settings.use_hybrid_recognition:
             if self._hybrid_service is None:
                 from src.services.hybrid_face_service import HybridFaceService
+
                 self._hybrid_service = HybridFaceService(self.db_session)
             return self._hybrid_service
         return None
@@ -65,6 +66,7 @@ class FaceService:
 
         if self._liveness_provider is None:
             from src.providers.silent_face_liveness import get_liveness_provider
+
             self._liveness_provider = get_liveness_provider(
                 device_id=settings.liveness_device_id,
                 model_dir=settings.liveness_model_dir,
@@ -72,7 +74,7 @@ class FaceService:
             )
         return self._liveness_provider
 
-    async def _check_liveness(self, image_data: bytes, threshold: Optional[float] = None) -> None:
+    async def _check_liveness(self, image_data: bytes, threshold: float | None = None) -> None:
         """
         Check if image contains a real live person.
 
@@ -127,20 +129,12 @@ class FaceService:
                     f"(confidence: {result.confidence:.3f}, threshold: {detection_threshold})"
                 )
                 # Cache the failure (TTL: 60 seconds)
-                await cache.set_json(
-                    cache_key,
-                    {"is_real": False, "error": error_msg},
-                    ex=60
-                )
+                await cache.set_json(cache_key, {"is_real": False, "error": error_msg}, ex=60)
                 raise ValueError(error_msg)
 
             logger.info(f"Liveness check passed (confidence: {result.confidence:.3f})")
             # Cache the success (TTL: 60 seconds)
-            await cache.set_json(
-                cache_key,
-                {"is_real": True, "error": None},
-                ex=60
-            )
+            await cache.set_json(cache_key, {"is_real": True, "error": None}, ex=60)
 
         except ValueError:
             # Re-raise liveness failures
@@ -153,8 +147,8 @@ class FaceService:
         self,
         image_data: bytes,
         user_name: str,
-        user_email: Optional[str] = None,
-        additional_metadata: Optional[dict] = None,
+        user_email: str | None = None,
+        additional_metadata: dict | None = None,
     ) -> Face:
         """
         Enroll a new face.
@@ -237,7 +231,7 @@ class FaceService:
         image_data: bytes,
         max_results: int = 10,
         confidence_threshold: float = 0.8,
-    ) -> List[tuple[Face, float]]:
+    ) -> list[tuple[Face, float]]:
         """
         Recognize face(s) from image.
 
@@ -272,9 +266,7 @@ class FaceService:
                 image_data, max_results, confidence_threshold
             )
         # Search for matches using provider
-        matches = await self.provider.recognize_face(
-            image_data, max_results, confidence_threshold
-        )
+        matches = await self.provider.recognize_face(image_data, max_results, confidence_threshold)
 
         # Fetch Face records from database
         results = []
@@ -288,7 +280,7 @@ class FaceService:
 
         return results
 
-    async def get_face_by_id(self, face_id: int) -> Optional[Face]:
+    async def get_face_by_id(self, face_id: int) -> Face | None:
         """
         Get face by ID.
 
@@ -300,9 +292,7 @@ class FaceService:
         """
         return await self.repository.get_by_id(face_id)
 
-    async def list_faces(
-        self, limit: int = 100, offset: int = 0
-    ) -> tuple[List[Face], int]:
+    async def list_faces(self, limit: int = 100, offset: int = 0) -> tuple[list[Face], int]:
         """
         List all faces with pagination.
 
@@ -369,7 +359,7 @@ class FaceService:
         image_data = await self.storage.read(face.image_path)
         return image_data
 
-    async def get_user_photos(self, user_name: str) -> List[Face]:
+    async def get_user_photos(self, user_name: str) -> list[Face]:
         """
         Get all photos (enrolled + verified) for a user.
 

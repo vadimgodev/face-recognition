@@ -6,18 +6,16 @@ Two-stage pipeline:
 2. Accurate recognition (InsightFace + strategy) identifies each face
 """
 
+import logging
 from io import BytesIO
-from typing import List, Tuple
 
 import numpy as np
 from PIL import Image
 
 from src.config.settings import settings
-from src.database.models import Face
 from src.services.auto_capture_service import AutoCaptureService
 from src.services.recognition_strategies import RecognitionStrategy
 from src.utils.face_processing import crop_face_from_bbox
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +47,7 @@ class MultiFaceService:
         image_data: bytes,
         max_results_per_face: int = 5,
         confidence_threshold: float = 0.8,
-    ) -> Tuple[List[dict], str]:
+    ) -> tuple[list[dict], str]:
         """
         Recognize multiple faces in a single image.
 
@@ -89,11 +87,9 @@ class MultiFaceService:
             )
         else:
             # Fallback to InsightFace if face_detector not initialized
-            logger.warning(
-                "Face detector not initialized, using InsightFace for detection"
-            )
-            detected_faces_insightface = (
-                await self.insightface_provider.detect_multiple_faces(image_data)
+            logger.warning("Face detector not initialized, using InsightFace for detection")
+            detected_faces_insightface = await self.insightface_provider.detect_multiple_faces(
+                image_data
             )
             detected_bboxes = [f["bbox"] for f in detected_faces_insightface]
 
@@ -115,8 +111,7 @@ class MultiFaceService:
 
         # Step 2: ACCURATE RECOGNITION for each detected face
         processor_name = (
-            f"detection:{settings.face_detection_method}"
-            f"+recognition:{settings.hybrid_mode}"
+            f"detection:{settings.face_detection_method}" f"+recognition:{settings.hybrid_mode}"
         )
         face_results = []
 
@@ -211,12 +206,14 @@ class MultiFaceService:
                 best_match_processor = match_processor
                 best_match_similarity = similarity
 
-            formatted_matches.append((
-                face,
-                similarity,
-                False,  # photo_captured placeholder
-                match_processor,
-            ))
+            formatted_matches.append(
+                (
+                    face,
+                    similarity,
+                    False,  # photo_captured placeholder
+                    match_processor,
+                )
+            )
 
         # Auto-capture for best match
         photo_captured = False

@@ -1,9 +1,12 @@
 """Redis client wrapper with connection pooling and graceful fallback."""
 
-import json
+from __future__ import annotations
+
 import hashlib
+import json
 import logging
-from typing import Optional, Any, Union
+from typing import Any
+
 import redis.asyncio as redis
 from redis.asyncio.connection import ConnectionPool
 
@@ -16,8 +19,8 @@ class RedisCache:
     """Async Redis cache client with graceful fallback."""
 
     def __init__(self):
-        self._pool: Optional[ConnectionPool] = None
-        self._client: Optional[redis.Redis] = None
+        self._pool: ConnectionPool | None = None
+        self._client: redis.Redis | None = None
         self._enabled = settings.redis_enabled
 
     async def initialize(self):
@@ -55,7 +58,7 @@ class RedisCache:
         """Check if Redis is available."""
         return self._enabled and self._client is not None
 
-    async def get(self, key: str) -> Optional[str]:
+    async def get(self, key: str) -> str | None:
         """Get value from Redis."""
         if not self._is_available():
             return None
@@ -67,12 +70,7 @@ class RedisCache:
             logger.error(f"Redis GET error for key {key}: {e}")
             return None
 
-    async def set(
-        self,
-        key: str,
-        value: str,
-        ex: Optional[int] = None
-    ) -> bool:
+    async def set(self, key: str, value: str, ex: int | None = None) -> bool:
         """Set value in Redis with optional expiration."""
         if not self._is_available():
             return False
@@ -112,7 +110,7 @@ class RedisCache:
             logger.error(f"Redis EXISTS error for key {key}: {e}")
             return False
 
-    async def get_json(self, key: str) -> Optional[Any]:
+    async def get_json(self, key: str) -> Any | None:
         """Get JSON value from Redis."""
         value = await self.get(key)
         if value is None:
@@ -124,12 +122,7 @@ class RedisCache:
             logger.error(f"Failed to decode JSON for key {key}: {e}")
             return None
 
-    async def set_json(
-        self,
-        key: str,
-        value: Any,
-        ex: Optional[int] = None
-    ) -> bool:
+    async def set_json(self, key: str, value: Any, ex: int | None = None) -> bool:
         """Set JSON value in Redis."""
         try:
             json_str = json.dumps(value)
@@ -164,7 +157,7 @@ class RedisCache:
 
 
 # Global Redis client instance
-_redis_cache: Optional[RedisCache] = None
+_redis_cache: RedisCache | None = None
 
 
 def get_redis_client() -> RedisCache:

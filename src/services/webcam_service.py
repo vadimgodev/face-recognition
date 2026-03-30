@@ -1,10 +1,11 @@
 """Webcam capture service for face recognition."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import time
 from io import BytesIO
-from typing import Optional
 
 import cv2
 import httpx
@@ -43,11 +44,11 @@ class WebcamService:
         self.cooldown_seconds = settings.webcam_success_cooldown_seconds
 
         self.is_running = False
-        self.last_success_time: Optional[float] = None
-        self.last_recognized_user: Optional[str] = None
+        self.last_success_time: float | None = None
+        self.last_recognized_user: str | None = None
 
         # Initialize video capture
-        self.cap: Optional[cv2.VideoCapture] = None
+        self.cap: cv2.VideoCapture | None = None
 
         # InsightFace for local face detection (optional, lighter than full recognition)
         self._init_face_detector()
@@ -58,8 +59,9 @@ class WebcamService:
     def _init_face_detector(self):
         """Initialize face detector for pre-filtering frames."""
         try:
-            import insightface
             import warnings
+
+            import insightface
 
             # Suppress warnings during detector initialization
             with warnings.catch_warnings():
@@ -75,7 +77,7 @@ class WebcamService:
                     det_size=(320, 320),  # Smaller size for faster detection
                 )
             logger.info("Face detector initialized successfully")
-        except Exception as e:
+        except Exception:
             # This is not critical - we can still work without local face detection
             # All frames will be sent to the API for recognition
             logger.info("Running without local face detection (all frames will be sent to API)")
@@ -112,7 +114,9 @@ class WebcamService:
                     f"or set LIVENESS_ENABLED=false to disable liveness detection."
                 ) from e
             # If liveness is explicitly disabled, allow None
-            logger.warning("Liveness detection disabled, continuing without anti-spoofing protection")
+            logger.warning(
+                "Liveness detection disabled, continuing without anti-spoofing protection"
+            )
             self.liveness_provider = None
 
     def start_capture(self) -> bool:
@@ -155,7 +159,7 @@ class WebcamService:
             self.cap = None
         logger.info("Camera capture stopped")
 
-    def capture_frame(self) -> Optional[np.ndarray]:
+    def capture_frame(self) -> np.ndarray | None:
         """
         Capture a single frame from webcam.
 
@@ -230,7 +234,7 @@ class WebcamService:
             logger.error(f"Liveness check error: {e}")
             # FAIL CLOSED - block on errors for maximum security
             # This prevents unclear/low-quality frames from bypassing liveness check
-            logger.warning(f"🚫 Liveness check failed due to error - BLOCKING frame")
+            logger.warning("🚫 Liveness check failed due to error - BLOCKING frame")
             return False, 0.0, "error"
 
     def frame_to_jpeg_bytes(self, frame: np.ndarray, quality: int = 85) -> bytes:
@@ -254,7 +258,7 @@ class WebcamService:
         buffer.seek(0)
         return buffer.getvalue()
 
-    async def recognize_face(self, image_bytes: bytes) -> Optional[dict]:
+    async def recognize_face(self, image_bytes: bytes) -> dict | None:
         """
         Send image to recognition API.
 
@@ -267,6 +271,7 @@ class WebcamService:
         try:
             # Get auth credentials from environment
             from os import environ
+
             basic_auth_user = environ.get("BASIC_AUTH_USERNAME", "")
             basic_auth_pass = environ.get("BASIC_AUTH_PASSWORD", "")
             api_token = environ.get("SECRET_KEY", settings.secret_key)
@@ -292,7 +297,7 @@ class WebcamService:
             try:
                 error_detail = e.response.text
                 logger.error(f"Recognition API returned {e.response.status_code}: {error_detail}")
-            except:
+            except Exception:
                 logger.error(f"Recognition API request failed: {e}")
             return None
         except httpx.HTTPError as e:
@@ -361,14 +366,15 @@ class WebcamService:
                     best_similarity = similarity
                     best_match = match
                     best_match_face_data = match.get("face", {})
-                    best_match_processor = match.get("processor", result.get("processor", "unknown"))
+                    best_match_processor = match.get(
+                        "processor", result.get("processor", "unknown")
+                    )
 
         # Log info about all detected faces
         total_faces = len(detected_faces)
         faces_with_matches = sum(1 for f in detected_faces if f.get("total_matches", 0) > 0)
         logger.info(
-            f"Multi-face: detected {total_faces} face(s), "
-            f"{faces_with_matches} recognized"
+            f"Multi-face: detected {total_faces} face(s), " f"{faces_with_matches} recognized"
         )
 
         if not best_match:
@@ -457,15 +463,17 @@ class WebcamService:
 
                 # Check liveness (anti-spoofing) before sending to recognition API
                 if self.liveness_provider is not None:
-                    is_real, liveness_confidence, spoofing_type = await self.check_liveness(image_bytes)
+                    is_real, liveness_confidence, spoofing_type = await self.check_liveness(
+                        image_bytes
+                    )
 
                     if not is_real:
                         # Spoofing attempt or detection error - log and skip this frame
                         if spoofing_type == "error":
                             # Detection error (face not detected clearly)
                             logger.warning(
-                                f"🚫 Liveness check failed (detection error) - Frame BLOCKED "
-                                f"(fail-closed security policy)"
+                                "🚫 Liveness check failed (detection error) - Frame BLOCKED "
+                                "(fail-closed security policy)"
                             )
                             access_logger.log_recognition_event(
                                 result="liveness_detection_failed",
@@ -493,7 +501,9 @@ class WebcamService:
                         continue
 
                     # Log successful liveness check (optional, can be noisy)
-                    logger.debug(f"✅ Liveness check passed (confidence: {liveness_confidence:.3f})")
+                    logger.debug(
+                        f"✅ Liveness check passed (confidence: {liveness_confidence:.3f})"
+                    )
 
                 # Send to recognition API (synchronous - wait for response)
                 result = await self.recognize_face(image_bytes)
@@ -523,6 +533,7 @@ class WebcamService:
 
 # Global webcam service instance (initialized lazily to avoid event loop issues)
 webcam_service = None
+
 
 def get_webcam_service():
     """Get or create the global webcam service instance."""

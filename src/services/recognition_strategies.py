@@ -8,14 +8,15 @@ Each strategy encapsulates a different approach to face recognition:
 - AWSOnly: AWS Rekognition search only
 """
 
+from __future__ import annotations
+
+import logging
 from abc import ABC, abstractmethod
-from typing import List, Optional, Tuple
 
 from src.config.settings import settings
 from src.database.models import Face
 from src.database.repository import FaceRepository
 from src.services.template_service import TemplateService
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ class RecognitionStrategy(ABC):
         image_data: bytes,
         max_results: int,
         confidence_threshold: float,
-    ) -> List[Tuple[Face, float, bool]]:
+    ) -> list[tuple[Face, float, bool]]:
         """
         Recognize faces from raw image data.
 
@@ -50,10 +51,10 @@ class RecognitionStrategy(ABC):
     @abstractmethod
     async def recognize_from_embedding(
         self,
-        embedding: List[float],
+        embedding: list[float],
         max_results: int,
         confidence_threshold: float,
-    ) -> List[Tuple]:
+    ) -> list[tuple]:
         """
         Recognize faces from a pre-extracted embedding.
 
@@ -71,8 +72,9 @@ class InsightFaceOnlyStrategy(RecognitionStrategy):
     Cost: Free (only compute)
     """
 
-    def __init__(self, insightface_provider, repository: FaceRepository,
-                 template_service: TemplateService):
+    def __init__(
+        self, insightface_provider, repository: FaceRepository, template_service: TemplateService
+    ):
         self.provider = insightface_provider
         self.repository = repository
         self.template = template_service
@@ -82,7 +84,7 @@ class InsightFaceOnlyStrategy(RecognitionStrategy):
         image_data: bytes,
         max_results: int,
         confidence_threshold: float,
-    ) -> List[Tuple[Face, float, bool]]:
+    ) -> list[tuple[Face, float, bool]]:
         """
         Fast recognition using InsightFace embeddings + pgvector search
         with template averaging.
@@ -110,10 +112,10 @@ class InsightFaceOnlyStrategy(RecognitionStrategy):
 
     async def recognize_from_embedding(
         self,
-        embedding: List[float],
+        embedding: list[float],
         max_results: int,
         confidence_threshold: float,
-    ) -> List[Tuple[Face, float]]:
+    ) -> list[tuple[Face, float]]:
         """Recognize from pre-extracted embedding with template averaging."""
         results = await self.repository.search_by_embedding(
             embedding=embedding,
@@ -141,8 +143,14 @@ class SmartHybridStrategy(RecognitionStrategy):
     Cost: 80-90% cheaper than always-AWS approach
     """
 
-    def __init__(self, insightface_provider, aws_provider, repository: FaceRepository,
-                 template_service: TemplateService, storage):
+    def __init__(
+        self,
+        insightface_provider,
+        aws_provider,
+        repository: FaceRepository,
+        template_service: TemplateService,
+        storage,
+    ):
         self.insightface = insightface_provider
         self.aws_provider = aws_provider
         self.repository = repository
@@ -154,7 +162,7 @@ class SmartHybridStrategy(RecognitionStrategy):
         image_data: bytes,
         max_results: int,
         confidence_threshold: float,
-    ) -> List[Tuple[Face, float, bool]]:
+    ) -> list[tuple[Face, float, bool]]:
         """
         Smart hybrid recognition with adaptive AWS verification.
 
@@ -238,10 +246,10 @@ class SmartHybridStrategy(RecognitionStrategy):
 
     async def recognize_from_embedding(
         self,
-        embedding: List[float],
+        embedding: list[float],
         max_results: int,
         confidence_threshold: float,
-    ) -> List[Tuple[Face, float, bool]]:
+    ) -> list[tuple[Face, float, bool]]:
         """
         Smart hybrid from embedding. For multi-face use, AWS verification is
         not used (we lack the original face crop for CompareFaces).
@@ -271,7 +279,7 @@ class SmartHybridStrategy(RecognitionStrategy):
 
         # Group by user and compute template similarity
         user_groups: dict = {}
-        for face, score, aws_used in final_results:
+        for face, _score, aws_used in final_results:
             if face.user_name not in user_groups:
                 user_groups[face.user_name] = {
                     "faces": [],
@@ -294,9 +302,7 @@ class SmartHybridStrategy(RecognitionStrategy):
         final_user_results.sort(key=lambda x: x[1], reverse=True)
         return final_user_results[:max_results]
 
-    async def _verify_with_aws(
-        self, query_image: bytes, face: Face
-    ) -> Optional[float]:
+    async def _verify_with_aws(self, query_image: bytes, face: Face) -> float | None:
         """
         Use AWS CompareFaces to verify a medium-confidence match.
 
@@ -347,8 +353,13 @@ class InsightFaceAWSStrategy(RecognitionStrategy):
     Cost: Only verify top candidates (~90% cheaper than full AWS search)
     """
 
-    def __init__(self, insightface_provider, aws_provider,
-                 repository: FaceRepository, template_service: TemplateService):
+    def __init__(
+        self,
+        insightface_provider,
+        aws_provider,
+        repository: FaceRepository,
+        template_service: TemplateService,
+    ):
         self.insightface = insightface_provider
         self.aws_provider = aws_provider
         self.repository = repository
@@ -359,7 +370,7 @@ class InsightFaceAWSStrategy(RecognitionStrategy):
         image_data: bytes,
         max_results: int,
         confidence_threshold: float,
-    ) -> List[Tuple[Face, float, bool]]:
+    ) -> list[tuple[Face, float, bool]]:
         """Hybrid: InsightFace vector search + AWS verification."""
         query_embedding = await self.insightface.extract_embedding(image_data)
 
@@ -373,9 +384,7 @@ class InsightFaceAWSStrategy(RecognitionStrategy):
             return []
 
         verified_results = []
-        aws_verify_count = min(
-            len(vector_candidates), settings.aws_verification_count
-        )
+        aws_verify_count = min(len(vector_candidates), settings.aws_verification_count)
 
         for face, vector_similarity in vector_candidates[:aws_verify_count]:
             aws_similarity = 0.0
@@ -399,10 +408,10 @@ class InsightFaceAWSStrategy(RecognitionStrategy):
 
     async def recognize_from_embedding(
         self,
-        embedding: List[float],
+        embedding: list[float],
         max_results: int,
         confidence_threshold: float,
-    ) -> List[Tuple[Face, float]]:
+    ) -> list[tuple[Face, float]]:
         """
         Hybrid from embedding: vector search only (AWS verification
         requires raw image, not available for multi-face).
@@ -432,7 +441,7 @@ class AWSOnlyStrategy(RecognitionStrategy):
         image_data: bytes,
         max_results: int,
         confidence_threshold: float,
-    ) -> List[Tuple[Face, float, bool]]:
+    ) -> list[tuple[Face, float, bool]]:
         """Full AWS Rekognition search."""
         matches = await self.aws_provider.recognize_face(
             image_data, max_results, confidence_threshold
@@ -440,9 +449,7 @@ class AWSOnlyStrategy(RecognitionStrategy):
 
         results = []
         for match in matches:
-            face = await self.repository.get_by_provider_face_id(
-                match.face_id, "aws_rekognition"
-            )
+            face = await self.repository.get_by_provider_face_id(match.face_id, "aws_rekognition")
             if face:
                 results.append((face, match.similarity, False))
 
@@ -450,10 +457,10 @@ class AWSOnlyStrategy(RecognitionStrategy):
 
     async def recognize_from_embedding(
         self,
-        embedding: List[float],
+        embedding: list[float],
         max_results: int,
         confidence_threshold: float,
-    ) -> List[Tuple]:
+    ) -> list[tuple]:
         """AWS-only does not support embedding-based recognition."""
         raise ValueError(
             "aws_only mode not supported for multi-face recognition. "

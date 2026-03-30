@@ -1,14 +1,16 @@
 """Tests for FaceRepository (src/database/repository.py)."""
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
+
 from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from src.database.repository import FaceRepository
-
 
 # ============================================================================
 # Helpers
 # ============================================================================
+
 
 def _make_mock_session():
     """Return a fully-mocked AsyncSession."""
@@ -18,18 +20,18 @@ def _make_mock_session():
 
 def _make_fake_face(**overrides):
     """Return a MagicMock that behaves like a Face instance."""
-    defaults = dict(
-        id=1,
-        user_name="alice",
-        user_email="alice@example.com",
-        provider_name="insightface",
-        provider_face_id="face_abc",
-        image_path="/images/alice.jpg",
-        image_storage="local",
-        photo_type="enrolled",
-        created_at=datetime(2025, 1, 1),
-        updated_at=datetime(2025, 1, 1),
-    )
+    defaults = {
+        "id": 1,
+        "user_name": "alice",
+        "user_email": "alice@example.com",
+        "provider_name": "insightface",
+        "provider_face_id": "face_abc",
+        "image_path": "/images/alice.jpg",
+        "image_storage": "local",
+        "photo_type": "enrolled",
+        "created_at": datetime(2025, 1, 1),
+        "updated_at": datetime(2025, 1, 1),
+    }
     defaults.update(overrides)
     face = MagicMock(**defaults)
     # Make sure .id attribute works correctly on the mock
@@ -181,10 +183,9 @@ class TestListAll:
 
         # Compile the statement to SQL text and verify it contains "count"
         from sqlalchemy.dialects import postgresql
+
         compiled = str(stmt.compile(dialect=postgresql.dialect()))
-        assert "count" in compiled.lower(), (
-            f"Expected SQL COUNT in query, got: {compiled}"
-        )
+        assert "count" in compiled.lower(), f"Expected SQL COUNT in query, got: {compiled}"
 
     @pytest.mark.asyncio
     async def test_list_all_respects_pagination(self):
@@ -223,9 +224,7 @@ class TestSearchByEmbedding:
         session.execute.return_value = mock_result
 
         repo = FaceRepository(session)
-        results = await repo.search_by_embedding(
-            embedding=[0.1] * 512, threshold=0.7, limit=10
-        )
+        results = await repo.search_by_embedding(embedding=[0.1] * 512, threshold=0.7, limit=10)
 
         assert len(results) == 1
         assert results[0][0] is face
@@ -240,9 +239,7 @@ class TestSearchByEmbedding:
         session.execute.return_value = mock_result
 
         repo = FaceRepository(session)
-        results = await repo.search_by_embedding(
-            embedding=[0.0] * 512, threshold=0.9
-        )
+        results = await repo.search_by_embedding(embedding=[0.0] * 512, threshold=0.9)
 
         assert results == []
 

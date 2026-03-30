@@ -9,20 +9,26 @@ This provider uses InsightFace to:
 Much faster than AWS Rekognition for bulk operations and doesn't require API calls.
 """
 
-import asyncio
-import logging
-import hashlib
-import threading
-from typing import List, Optional, Tuple, Dict, Any
-import numpy as np
-from io import BytesIO
-from PIL import Image
-from insightface.app import FaceAnalysis
+from __future__ import annotations
 
-from src.providers.base import FaceProvider, FaceMatch, EnrollmentResult, FaceMetadata
-from src.utils.face_processing import BoundingBox, convert_insightface_bbox
+import asyncio
+import hashlib
+import logging
+import threading
+from io import BytesIO
+from typing import Any
+
+import numpy as np
+from insightface.app import FaceAnalysis
+from PIL import Image
+
 from src.cache.redis_client import get_redis_client
-from src.exceptions import NoFaceDetectedError, MultipleFacesDetectedError, InvalidImageError, ProviderError
+from src.exceptions import (
+    MultipleFacesDetectedError,
+    NoFaceDetectedError,
+)
+from src.providers.base import EnrollmentResult, FaceMatch, FaceMetadata, FaceProvider
+from src.utils.face_processing import convert_insightface_bbox
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +44,7 @@ class InsightFaceProvider(FaceProvider):
     def __init__(
         self,
         model_name: str = "buffalo_l",
-        det_size: Tuple[int, int] = (640, 640),
+        det_size: tuple[int, int] = (640, 640),
         ctx_id: int = -1,  # -1 for CPU, 0+ for GPU
     ):
         """
@@ -52,7 +58,7 @@ class InsightFaceProvider(FaceProvider):
         self.model_name = model_name
         self.det_size = det_size
         self.ctx_id = ctx_id
-        self._app: Optional[FaceAnalysis] = None
+        self._app: FaceAnalysis | None = None
         self._lock = threading.Lock()
 
     def _get_app(self) -> FaceAnalysis:
@@ -73,18 +79,24 @@ class InsightFaceProvider(FaceProvider):
                         app = FaceAnalysis(
                             name=self.model_name,
                             allowed_modules=["detection", "recognition"],
-                            providers=["CPUExecutionProvider"]
-                            if self.ctx_id < 0
-                            else ["CUDAExecutionProvider"],
+                            providers=(
+                                ["CPUExecutionProvider"]
+                                if self.ctx_id < 0
+                                else ["CUDAExecutionProvider"]
+                            ),
                         )
                     except (AssertionError, KeyError):
                         # Fallback: load all modules if selective loading fails
-                        logger.warning(f"Could not load {self.model_name} with selective modules, loading all modules")
+                        logger.warning(
+                            f"Could not load {self.model_name} with selective modules, loading all modules"
+                        )
                         app = FaceAnalysis(
                             name=self.model_name,
-                            providers=["CPUExecutionProvider"]
-                            if self.ctx_id < 0
-                            else ["CUDAExecutionProvider"],
+                            providers=(
+                                ["CPUExecutionProvider"]
+                                if self.ctx_id < 0
+                                else ["CUDAExecutionProvider"]
+                            ),
                         )
                     app.prepare(ctx_id=self.ctx_id, det_size=self.det_size)
 
@@ -121,7 +133,7 @@ class InsightFaceProvider(FaceProvider):
 
     async def extract_embedding(
         self, image_bytes: bytes, allow_multiple: bool = False
-    ) -> List[float]:
+    ) -> list[float]:
         """
         Extract 512-dimensional embedding from face image.
 
@@ -176,9 +188,7 @@ class InsightFaceProvider(FaceProvider):
 
         return embedding
 
-    async def detect_multiple_faces(
-        self, image_bytes: bytes
-    ) -> List[Dict[str, Any]]:
+    async def detect_multiple_faces(self, image_bytes: bytes) -> list[dict[str, Any]]:
         """
         Detect all faces in an image and return metadata.
 
@@ -228,9 +238,7 @@ class InsightFaceProvider(FaceProvider):
 
         return faces
 
-    async def extract_multiple_embeddings(
-        self, image_bytes: bytes
-    ) -> List[List[float]]:
+    async def extract_multiple_embeddings(self, image_bytes: bytes) -> list[list[float]]:
         """
         Extract embeddings from all faces in an image.
 
@@ -253,9 +261,7 @@ class InsightFaceProvider(FaceProvider):
         logger.info(f"Extracted {len(embeddings)} embeddings from image")
         return embeddings
 
-    async def delete_face(
-        self, face_id: str, collection_id: Optional[str] = None
-    ) -> bool:
+    async def delete_face(self, face_id: str, collection_id: str | None = None) -> bool:
         """
         Delete face (no-op for InsightFace).
 
@@ -271,9 +277,7 @@ class InsightFaceProvider(FaceProvider):
         # Deletion handled by database - no action needed here
         return True
 
-    async def enroll_face(
-        self, image_bytes: bytes, metadata: FaceMetadata
-    ) -> EnrollmentResult:
+    async def enroll_face(self, image_bytes: bytes, metadata: FaceMetadata) -> EnrollmentResult:
         """
         Enroll a face by extracting embedding.
 
@@ -291,8 +295,8 @@ class InsightFaceProvider(FaceProvider):
         embedding = await self.extract_embedding(image_bytes)
 
         # Generate a unique face ID
-        import hashlib
         from datetime import datetime
+
         face_id = f"insightface_{metadata.user_id}_{datetime.utcnow().timestamp()}"
 
         return EnrollmentResult(
@@ -305,7 +309,7 @@ class InsightFaceProvider(FaceProvider):
 
     async def recognize_face(
         self, image_bytes: bytes, max_results: int = 10, confidence_threshold: float = 0.8
-    ) -> List[FaceMatch]:
+    ) -> list[FaceMatch]:
         """
         Recognize faces in an image by extracting embedding.
 
@@ -330,7 +334,7 @@ class InsightFaceProvider(FaceProvider):
         # Return empty list - service layer handles the actual matching
         return []
 
-    async def get_face_details(self, face_id: str) -> Optional[dict]:
+    async def get_face_details(self, face_id: str) -> dict | None:
         """
         Get face details (not applicable for InsightFace).
 

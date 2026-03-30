@@ -8,10 +8,11 @@ Liveness detection helps prevent spoofing attacks such as:
 - Deep fake attacks
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 
 class SpoofingType(str, Enum):
@@ -31,7 +32,7 @@ class LivenessResult:
     is_real: bool  # True if real person detected
     confidence: float  # Confidence score (0-1)
     spoofing_type: SpoofingType  # Type of attack detected (if any)
-    details: Optional[dict] = None  # Additional provider-specific details
+    details: dict | None = None  # Additional provider-specific details
 
 
 class LivenessProvider(ABC):
@@ -44,9 +45,7 @@ class LivenessProvider(ABC):
     """
 
     @abstractmethod
-    async def check_liveness(
-        self, image_bytes: bytes, threshold: float = 0.5
-    ) -> LivenessResult:
+    async def check_liveness(self, image_bytes: bytes, threshold: float = 0.5) -> LivenessResult:
         """
         Check if the image contains a real live person.
 

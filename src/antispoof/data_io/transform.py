@@ -1,29 +1,39 @@
-# -*- coding: utf-8 -*-
 # @Time : 20-6-4 下午4:19
 # @Author : zhuying
 # @Company : Minivision
 # @File : transform.py
 # @Software : PyCharm
 
-from __future__ import division
 import math
 import random
+
 from PIL import Image
+
 try:
     import accimage
 except ImportError:
     accimage = None
-import numpy as np
 import numbers
 import types
 
+import numpy as np
+
 from . import functional as F
 
-__all__ = ["Compose", "ToTensor", "ToPILImage", "Normalize", "RandomHorizontalFlip",
-           "Lambda", "RandomResizedCrop", "ColorJitter", "RandomRotation"]
+__all__ = [
+    "Compose",
+    "ToTensor",
+    "ToPILImage",
+    "Normalize",
+    "RandomHorizontalFlip",
+    "Lambda",
+    "RandomResizedCrop",
+    "ColorJitter",
+    "RandomRotation",
+]
 
 
-class Compose(object):
+class Compose:
     """Composes several transforms together.
 
     Args:
@@ -45,8 +55,7 @@ class Compose(object):
         return img
 
 
-class ToTensor(object):
-
+class ToTensor:
     """Convert a ``PIL Image`` or ``numpy.ndarray`` to tensor.
 
     Converts a PIL Image or numpy.ndarray (H x W x C) in the range
@@ -64,7 +73,7 @@ class ToTensor(object):
         return F.to_tensor(pic)
 
 
-class Lambda(object):
+class Lambda:
     """Apply a user-defined lambda as a transform.
 
     Args:
@@ -79,7 +88,7 @@ class Lambda(object):
         return self.lambd(img)
 
 
-class ToPILImage(object):
+class ToPILImage:
     """Convert a tensor or an ndarray to PIL Image.
 
     Converts a torch.*Tensor of shape C x H x W or a numpy ndarray of shape
@@ -95,6 +104,7 @@ class ToPILImage(object):
 
     .. _PIL.Image mode: http://pillow.readthedocs.io/en/3.4.x/handbook/concepts.html#modes
     """
+
     def __init__(self, mode=None):
         self.mode = mode
 
@@ -110,7 +120,7 @@ class ToPILImage(object):
         return F.to_pil_image(pic, self.mode)
 
 
-class Normalize(object):
+class Normalize:
     """Normalize an tensor image with mean and standard deviation.
     Given mean: ``(M1,...,Mn)`` and std: ``(S1,..,Sn)`` for ``n`` channels, this transform
     will normalize each channel of the input ``torch.*Tensor`` i.e.
@@ -136,7 +146,7 @@ class Normalize(object):
         return F.normalize(tensor, self.mean, self.std)
 
 
-class RandomHorizontalFlip(object):
+class RandomHorizontalFlip:
     """Horizontally flip the given PIL Image randomly with a probability of 0.5."""
 
     def __call__(self, img):
@@ -152,7 +162,7 @@ class RandomHorizontalFlip(object):
         return img
 
 
-class RandomResizedCrop(object):
+class RandomResizedCrop:
     """Crop the given PIL Image to random size and aspect ratio.
 
     A crop of random size (default: of 0.08 to 1.0) of the original size and a random
@@ -167,7 +177,9 @@ class RandomResizedCrop(object):
         interpolation: Default: PIL.Image.BILINEAR
     """
 
-    def __init__(self, size, scale=(0.08, 1.0), ratio=(3. / 4., 4. / 3.), interpolation=Image.BILINEAR):
+    def __init__(
+        self, size, scale=(0.08, 1.0), ratio=(3.0 / 4.0, 4.0 / 3.0), interpolation=Image.BILINEAR
+    ):
         if isinstance(size, tuple):
             self.size = size
         else:
@@ -189,7 +201,7 @@ class RandomResizedCrop(object):
             tuple: params (i, j, h, w) to be passed to ``crop`` for a random
                 sized crop.
         """
-        for attempt in range(10):
+        for _attempt in range(10):
             area = img.size[0] * img.size[1]
             target_area = random.uniform(*scale) * area
             aspect_ratio = random.uniform(*ratio)
@@ -223,7 +235,7 @@ class RandomResizedCrop(object):
         return F.resized_crop(img, i, j, h, w, self.size, self.interpolation)
 
 
-class ColorJitter(object):
+class ColorJitter:
     """Randomly change the brightness, contrast and saturation of an image.
 
     Args:
@@ -236,6 +248,7 @@ class ColorJitter(object):
         hue(float): How much to jitter hue. hue_factor is chosen uniformly from
             [-hue, hue]. Should be >=0 and <= 0.5.
     """
+
     def __init__(self, brightness=0, contrast=0, saturation=0, hue=0):
         self.brightness = brightness
         self.contrast = contrast
@@ -282,12 +295,11 @@ class ColorJitter(object):
         Returns:
             PIL Image: Color jittered image.
         """
-        transform = self.get_params(self.brightness, self.contrast,
-                                    self.saturation, self.hue)
+        transform = self.get_params(self.brightness, self.contrast, self.saturation, self.hue)
         return transform(img)
 
 
-class RandomRotation(object):
+class RandomRotation:
     """Rotate the image by angle.
 
     Args:
@@ -343,5 +355,3 @@ class RandomRotation(object):
         angle = self.get_params(self.degrees)
 
         return F.rotate(img, angle, self.resample, self.expand, self.center)
-
-

@@ -6,11 +6,11 @@ Separates detection from recognition for multi-face scenarios.
 """
 
 import logging
-from typing import List, Optional, Tuple
 from enum import Enum
-import numpy as np
-import cv2
 from pathlib import Path
+
+import cv2
+import numpy as np
 
 from src.utils.face_processing import BoundingBox
 
@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 class DetectionMethod(Enum):
     """Face detection methods."""
+
     HAAR_CASCADE = "haar"
     DNN = "dnn"
     INSIGHTFACE = "insightface"
@@ -37,7 +38,7 @@ class FastFaceDetector:
     def __init__(
         self,
         method: DetectionMethod = DetectionMethod.DNN,
-        min_face_size: Tuple[int, int] = (80, 80),
+        min_face_size: tuple[int, int] = (80, 80),
         scale_factor: float = 1.1,
         min_neighbors: int = 4,
     ):
@@ -85,8 +86,14 @@ class FastFaceDetector:
             # Try to load from common paths
             possible_paths = [
                 ("./models/deploy.prototxt", "./models/res10_300x300_ssd_iter_140000.caffemodel"),
-                ("/app/models/deploy.prototxt", "/app/models/res10_300x300_ssd_iter_140000.caffemodel"),
-                ("~/.opencv/face_detector/deploy.prototxt", "~/.opencv/face_detector/res10_300x300_ssd_iter_140000.caffemodel"),
+                (
+                    "/app/models/deploy.prototxt",
+                    "/app/models/res10_300x300_ssd_iter_140000.caffemodel",
+                ),
+                (
+                    "~/.opencv/face_detector/deploy.prototxt",
+                    "~/.opencv/face_detector/res10_300x300_ssd_iter_140000.caffemodel",
+                ),
             ]
 
             for prototxt_path, model_path in possible_paths:
@@ -94,10 +101,7 @@ class FastFaceDetector:
                 model_path = Path(model_path).expanduser()
 
                 if prototxt_path.exists() and model_path.exists():
-                    self._dnn_net = cv2.dnn.readNetFromCaffe(
-                        str(prototxt_path),
-                        str(model_path)
-                    )
+                    self._dnn_net = cv2.dnn.readNetFromCaffe(str(prototxt_path), str(model_path))
                     logger.info(f"Loaded DNN face detector from {model_path}")
                     break
 
@@ -118,14 +122,14 @@ class FastFaceDetector:
         """Lazy-load InsightFace detector as fallback."""
         if self._insightface_app is None:
             from insightface.app import FaceAnalysis
+
             from src.config.settings import settings
 
             # Use the configured detection model (separate from recognition model)
             detection_model = settings.insightface_detection_model
 
             self._insightface_app = FaceAnalysis(
-                name=detection_model,
-                providers=["CPUExecutionProvider"]
+                name=detection_model, providers=["CPUExecutionProvider"]
             )
             self._insightface_app.prepare(ctx_id=-1, det_size=(320, 320))
             logger.info(f"Loaded InsightFace detector ({detection_model}) for DETECTION only")
@@ -136,7 +140,7 @@ class FastFaceDetector:
         self,
         image: np.ndarray,
         confidence_threshold: float = 0.5,
-    ) -> List[BoundingBox]:
+    ) -> list[BoundingBox]:
         """
         Detect faces in an image.
 
@@ -156,7 +160,7 @@ class FastFaceDetector:
         else:
             raise ValueError(f"Unknown detection method: {self.method}")
 
-    def _detect_haar(self, image: np.ndarray) -> List[BoundingBox]:
+    def _detect_haar(self, image: np.ndarray) -> list[BoundingBox]:
         """Detect faces using Haar Cascade."""
         cascade = self._get_haar_cascade()
 
@@ -191,7 +195,7 @@ class FastFaceDetector:
         self,
         image: np.ndarray,
         confidence_threshold: float = 0.5,
-    ) -> List[BoundingBox]:
+    ) -> list[BoundingBox]:
         """Detect faces using DNN."""
         net = self._get_dnn_net()
 
@@ -254,7 +258,7 @@ class FastFaceDetector:
         self,
         image: np.ndarray,
         confidence_threshold: float = 0.5,
-    ) -> List[BoundingBox]:
+    ) -> list[BoundingBox]:
         """Detect faces using InsightFace."""
         app = self._get_insightface_app()
 

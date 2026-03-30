@@ -1,6 +1,7 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, List
 
 
 @dataclass
@@ -10,8 +11,8 @@ class FaceMatch:
     face_id: str  # Provider's face ID
     confidence: float  # Confidence score (0-1)
     similarity: float  # Similarity score (0-1)
-    user_id: Optional[str] = None  # User ID (if available from metadata)
-    bounding_box: Optional[dict] = None  # Face bounding box coordinates
+    user_id: str | None = None  # User ID (if available from metadata)
+    bounding_box: dict | None = None  # Face bounding box coordinates
 
 
 @dataclass
@@ -20,9 +21,9 @@ class EnrollmentResult:
 
     face_id: str  # Provider's face ID
     confidence: float  # Quality/confidence score
-    bounding_box: Optional[dict] = None  # Face bounding box coordinates
-    quality_score: Optional[float] = None  # Face quality score
-    embedding: Optional[List[float]] = None  # Face embedding (if available)
+    bounding_box: dict | None = None  # Face bounding box coordinates
+    quality_score: float | None = None  # Face quality score
+    embedding: list[float] | None = None  # Face embedding (if available)
 
 
 @dataclass
@@ -31,8 +32,8 @@ class FaceMetadata:
 
     user_id: str
     user_name: str
-    user_email: Optional[str] = None
-    additional_data: Optional[dict] = None
+    user_email: str | None = None
+    additional_data: dict | None = None
 
 
 class FaceProvider(ABC):
@@ -47,9 +48,7 @@ class FaceProvider(ABC):
     """
 
     @abstractmethod
-    async def enroll_face(
-        self, image_bytes: bytes, metadata: FaceMetadata
-    ) -> EnrollmentResult:
+    async def enroll_face(self, image_bytes: bytes, metadata: FaceMetadata) -> EnrollmentResult:
         """
         Enroll a face in the provider's database.
 
@@ -69,7 +68,7 @@ class FaceProvider(ABC):
     @abstractmethod
     async def recognize_face(
         self, image_bytes: bytes, max_results: int = 10, confidence_threshold: float = 0.8
-    ) -> List[FaceMatch]:
+    ) -> list[FaceMatch]:
         """
         Recognize faces in an image.
 
@@ -105,7 +104,7 @@ class FaceProvider(ABC):
         pass
 
     @abstractmethod
-    async def get_face_details(self, face_id: str) -> Optional[dict]:
+    async def get_face_details(self, face_id: str) -> dict | None:
         """
         Get face details from provider.
 

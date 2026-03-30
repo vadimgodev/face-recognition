@@ -1,13 +1,15 @@
 """Tests for face recognition providers and factory."""
+
 import threading
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 from botocore.exceptions import ClientError
 
 from src.exceptions import (
-    NoFaceDetectedError,
-    MultipleFacesDetectedError,
     InvalidImageError,
+    MultipleFacesDetectedError,
+    NoFaceDetectedError,
     ProviderError,
 )
 from src.providers.base import FaceMetadata
@@ -92,7 +94,6 @@ class TestInsightFaceErrors:
         fake_image = MagicMock()
         fake_image.convert.return_value = fake_image
 
-        import numpy as np
         with patch("src.providers.insightface_provider.Image") as mock_pil:
             mock_pil.open.return_value = fake_image
             with patch("src.providers.insightface_provider.np") as mock_np:
@@ -172,6 +173,7 @@ class TestAWSProviderErrors:
         mock_boto3.client.return_value = mock_client
 
         from src.providers.aws_rekognition import AWSRekognitionProvider
+
         provider = AWSRekognitionProvider(use_sharding=False)
         return provider, mock_client
 
@@ -249,6 +251,7 @@ class TestAWSCompareFaces:
         mock_boto3.client.return_value = mock_client
 
         from src.providers.aws_rekognition import AWSRekognitionProvider
+
         provider = AWSRekognitionProvider(use_sharding=False)
         return provider, mock_client
 
@@ -256,9 +259,7 @@ class TestAWSCompareFaces:
     async def test_compare_faces_returns_score(self):
         provider, mock_client = self._make_provider()
 
-        mock_client.compare_faces.return_value = {
-            "FaceMatches": [{"Similarity": 95.5, "Face": {}}]
-        }
+        mock_client.compare_faces.return_value = {"FaceMatches": [{"Similarity": 95.5, "Face": {}}]}
 
         score = await provider.compare_faces(b"source", b"target", 0.0)
         assert score == pytest.approx(0.955)
@@ -295,6 +296,7 @@ class TestAWSProperties:
         mock_boto3.client.return_value = MagicMock()
 
         from src.providers.aws_rekognition import AWSRekognitionProvider
+
         provider = AWSRekognitionProvider(use_sharding=False)
         assert provider.provider_name == "aws_rekognition"
 
@@ -309,6 +311,7 @@ class TestAWSProperties:
         mock_boto3.client.return_value = MagicMock()
 
         from src.providers.aws_rekognition import AWSRekognitionProvider
+
         provider = AWSRekognitionProvider(use_sharding=False)
         assert provider.supports_embeddings is False
 
@@ -332,9 +335,7 @@ class TestProviderFactory:
     @patch("src.providers.factory._insightface_cache", None)
     @patch("src.providers.factory.settings")
     @patch("src.providers.factory.InsightFaceProvider")
-    def test_create_insightface_returns_cached_singleton(
-        self, mock_provider_cls, mock_settings
-    ):
+    def test_create_insightface_returns_cached_singleton(self, mock_provider_cls, mock_settings):
         """Calling create_provider('insightface') twice returns the same instance."""
         import src.providers.factory as factory_module
 
@@ -361,9 +362,7 @@ class TestProviderFactory:
     @patch("src.providers.factory._aws_cache", None)
     @patch("src.providers.factory.settings")
     @patch("src.providers.factory.AWSRekognitionProvider")
-    def test_create_aws_returns_cached_singleton(
-        self, mock_provider_cls, mock_settings
-    ):
+    def test_create_aws_returns_cached_singleton(self, mock_provider_cls, mock_settings):
         """Calling get_aws_provider twice returns the same instance."""
         import src.providers.factory as factory_module
 
@@ -385,9 +384,7 @@ class TestProviderFactory:
     @patch("src.providers.factory._aws_cache", None)
     @patch("src.providers.factory.settings")
     @patch("src.providers.factory.InsightFaceProvider")
-    def test_create_provider_defaults_to_settings(
-        self, mock_provider_cls, mock_settings
-    ):
+    def test_create_provider_defaults_to_settings(self, mock_provider_cls, mock_settings):
         """When no provider_name given, uses settings.face_provider."""
         import src.providers.factory as factory_module
 

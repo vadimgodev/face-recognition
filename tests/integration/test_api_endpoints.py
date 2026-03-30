@@ -6,19 +6,18 @@ No Docker, database, or model loading required.
 
 import io
 from datetime import datetime
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 from PIL import Image
 
 from src.exceptions import (
-    FaceRecognitionError,
     FaceNotFoundError,
-    NoFaceDetectedError,
+    FaceRecognitionError,
     InvalidImageError,
+    NoFaceDetectedError,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -39,23 +38,23 @@ def _make_jpeg_bytes() -> bytes:
 def _make_face(**overrides) -> MagicMock:
     """Build a mock Face ORM object accepted by FaceResponse.model_validate."""
     now = datetime.utcnow()
-    defaults = dict(
-        id=1,
-        user_name="alice",
-        user_email="alice@example.com",
-        provider_name="insightface",
-        provider_face_id="face-uuid-001",
-        image_path="/data/images/face_1.jpg",
-        image_storage="local",
-        quality_score=0.95,
-        confidence_score=0.92,
-        photo_type="enrolled",
-        verified_at=None,
-        verified_confidence=None,
-        verified_by_processor=None,
-        created_at=now,
-        updated_at=now,
-    )
+    defaults = {
+        "id": 1,
+        "user_name": "alice",
+        "user_email": "alice@example.com",
+        "provider_name": "insightface",
+        "provider_face_id": "face-uuid-001",
+        "image_path": "/data/images/face_1.jpg",
+        "image_storage": "local",
+        "quality_score": 0.95,
+        "confidence_score": 0.92,
+        "photo_type": "enrolled",
+        "verified_at": None,
+        "verified_confidence": None,
+        "verified_by_processor": None,
+        "created_at": now,
+        "updated_at": now,
+    }
     defaults.update(overrides)
 
     face = MagicMock()
@@ -70,6 +69,7 @@ def _make_face(**overrides) -> MagicMock:
 # ---------------------------------------------------------------------------
 # App with bypassed lifespan & patched secret_key
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def _patch_settings():
@@ -106,6 +106,7 @@ def test_image_bytes():
 def _build_app_no_lifespan():
     """Return the FastAPI app with lifespan disabled for testing."""
     from src.main import app
+
     # Disable the lifespan so tests don't trigger startup validation,
     # Redis, model warmup, etc.
     app.router.lifespan_context = None  # type: ignore[assignment]
@@ -127,8 +128,10 @@ def _disable_lifespan():
 # Transport helper
 # ---------------------------------------------------------------------------
 
+
 def _transport():
     from src.main import app
+
     return ASGITransport(app=app)
 
 
@@ -219,9 +222,7 @@ class TestAuthentication:
 @pytest.mark.asyncio
 class TestEnrollEndpoint:
 
-    async def test_enroll_success(
-        self, mock_face_service, test_image_bytes, _override_service
-    ):
+    async def test_enroll_success(self, mock_face_service, test_image_bytes, _override_service):
         face = _make_face()
         mock_face_service.enroll_face.return_value = face
 
@@ -250,9 +251,7 @@ class TestEnrollEndpoint:
             )
         assert resp.status_code == 422
 
-    async def test_enroll_without_user_name_returns_422(
-        self, test_image_bytes, _override_service
-    ):
+    async def test_enroll_without_user_name_returns_422(self, test_image_bytes, _override_service):
         async with AsyncClient(transport=_transport(), base_url="http://test") as c:
             resp = await c.post(
                 "/api/v1/faces/enroll",
@@ -305,9 +304,7 @@ class TestEnrollEndpoint:
 @pytest.mark.asyncio
 class TestRecognizeEndpoint:
 
-    async def test_recognize_success(
-        self, mock_face_service, test_image_bytes, _override_service
-    ):
+    async def test_recognize_success(self, mock_face_service, test_image_bytes, _override_service):
         face = _make_face()
         # recognize_face returns (matches_list, processor_string)
         mock_face_service.recognize_face.return_value = (
@@ -375,8 +372,14 @@ class TestRecognizeEndpoint:
         body = resp.json()
         # Top-level keys from RecognizeFaceResponse
         expected_keys = {
-            "success", "message", "matches", "total_matches",
-            "processor", "execution_time", "detection_time", "recognition_time",
+            "success",
+            "message",
+            "matches",
+            "total_matches",
+            "processor",
+            "execution_time",
+            "detection_time",
+            "recognition_time",
         }
         assert expected_keys.issubset(set(body.keys()))
 
@@ -390,11 +393,21 @@ class TestRecognizeEndpoint:
         # Face-level keys from FaceResponse
         face_data = match["face"]
         face_keys = {
-            "id", "user_name", "user_email", "provider_name",
-            "provider_face_id", "image_path", "image_storage",
-            "quality_score", "confidence_score", "photo_type",
-            "verified_at", "verified_confidence", "verified_by_processor",
-            "created_at", "updated_at",
+            "id",
+            "user_name",
+            "user_email",
+            "provider_name",
+            "provider_face_id",
+            "image_path",
+            "image_storage",
+            "quality_score",
+            "confidence_score",
+            "photo_type",
+            "verified_at",
+            "verified_confidence",
+            "verified_by_processor",
+            "created_at",
+            "updated_at",
         }
         assert face_keys.issubset(set(face_data.keys()))
 
@@ -418,9 +431,7 @@ class TestRecognizeEndpoint:
     async def test_recognize_invalid_image_error(
         self, mock_face_service, test_image_bytes, _override_service
     ):
-        mock_face_service.recognize_face.side_effect = InvalidImageError(
-            "Cannot decode image"
-        )
+        mock_face_service.recognize_face.side_effect = InvalidImageError("Cannot decode image")
 
         async with AsyncClient(transport=_transport(), base_url="http://test") as c:
             resp = await c.post(
@@ -456,9 +467,7 @@ class TestRecognizeEndpoint:
 @pytest.mark.asyncio
 class TestListFaces:
 
-    async def test_list_faces_returns_paginated(
-        self, mock_face_service, _override_service
-    ):
+    async def test_list_faces_returns_paginated(self, mock_face_service, _override_service):
         faces = [_make_face(id=i, user_name=f"user_{i}") for i in range(1, 4)]
         mock_face_service.list_faces.return_value = (faces, 3)
 
@@ -477,9 +486,7 @@ class TestListFaces:
         assert body["offset"] == 0
         assert len(body["faces"]) == 3
 
-    async def test_list_faces_pagination_params(
-        self, mock_face_service, _override_service
-    ):
+    async def test_list_faces_pagination_params(self, mock_face_service, _override_service):
         mock_face_service.list_faces.return_value = ([], 50)
 
         async with AsyncClient(transport=_transport(), base_url="http://test") as c:
@@ -580,9 +587,7 @@ class TestDeleteFace:
 
         assert resp.status_code == 404
 
-    async def test_delete_face_service_error(
-        self, mock_face_service, _override_service
-    ):
+    async def test_delete_face_service_error(self, mock_face_service, _override_service):
         mock_face_service.delete_face.side_effect = FaceRecognitionError(
             "Provider unavailable", status_code=502
         )
@@ -606,9 +611,7 @@ class TestDeleteFace:
 @pytest.mark.asyncio
 class TestErrorHandling:
 
-    async def test_face_recognition_error_returns_json(
-        self, mock_face_service, _override_service
-    ):
+    async def test_face_recognition_error_returns_json(self, mock_face_service, _override_service):
         """FaceRecognitionError subclasses produce structured JSON with success=false."""
         mock_face_service.list_faces.side_effect = FaceRecognitionError(
             "Something went wrong", status_code=400
@@ -626,9 +629,7 @@ class TestErrorHandling:
         assert "error" in body
         assert "detail" in body
 
-    async def test_face_not_found_error(
-        self, mock_face_service, _override_service
-    ):
+    async def test_face_not_found_error(self, mock_face_service, _override_service):
         mock_face_service.get_face_by_id.side_effect = FaceNotFoundError(face_id=7)
 
         async with AsyncClient(transport=_transport(), base_url="http://test") as c:
@@ -642,9 +643,7 @@ class TestErrorHandling:
         assert body["success"] is False
         assert body["error"] == "FaceNotFoundError"
 
-    async def test_generic_exception_returns_500(
-        self, mock_face_service, _override_service
-    ):
+    async def test_generic_exception_returns_500(self, mock_face_service, _override_service):
         """Unhandled exceptions in the service are caught by the route handler."""
         mock_face_service.list_faces.side_effect = RuntimeError("database down")
 
@@ -659,9 +658,7 @@ class TestErrorHandling:
     async def test_invalid_image_error(
         self, mock_face_service, test_image_bytes, _override_service
     ):
-        mock_face_service.enroll_face.side_effect = InvalidImageError(
-            "Corrupt JPEG data"
-        )
+        mock_face_service.enroll_face.side_effect = InvalidImageError("Corrupt JPEG data")
 
         async with AsyncClient(transport=_transport(), base_url="http://test") as c:
             resp = await c.post(

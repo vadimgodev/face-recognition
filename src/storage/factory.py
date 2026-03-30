@@ -1,7 +1,7 @@
+from src.config.settings import settings
 from src.storage.base import StorageBackend
 from src.storage.local import LocalStorageBackend
 from src.storage.s3 import S3StorageBackend
-from src.config.settings import settings
 
 
 class StorageFactory:
@@ -38,8 +38,7 @@ class StorageFactory:
             )
         else:
             raise ValueError(
-                f"Unsupported storage backend: {backend_type}. "
-                f"Supported: 'local', 's3'"
+                f"Unsupported storage backend: {backend_type}. " f"Supported: 'local', 's3'"
             )
 
 

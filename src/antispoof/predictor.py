@@ -1,25 +1,27 @@
 """Anti-spoofing prediction using MiniFASNet models."""
 
-import os
-import cv2
-import math
-import torch
-import threading
+from __future__ import annotations
+
 import logging
+import math
+import os
+import threading
+
+import cv2
 import numpy as np
+import torch
 import torch.nn.functional as F
-from typing import Optional, List, Tuple
 
-logger = logging.getLogger(__name__)
-
+from src.antispoof.data_io import transform as trans
 from src.antispoof.model_lib.MiniFASNet import (
     MiniFASNetV1,
-    MiniFASNetV2,
     MiniFASNetV1SE,
+    MiniFASNetV2,
     MiniFASNetV2SE,
 )
-from src.antispoof.data_io import transform as trans
 from src.antispoof.utility import get_kernel, parse_model_name
+
+logger = logging.getLogger(__name__)
 
 MODEL_MAPPING = {
     "MiniFASNetV1": MiniFASNetV1,
@@ -46,14 +48,15 @@ class FaceDetector:
 
         # Try to use InsightFace's built-in detector (more reliable)
         try:
-            import insightface
             import warnings
+
+            import insightface
 
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 self._insightface_detector = insightface.app.FaceAnalysis(
-                    name='buffalo_s',  # Lightweight model for detection only
-                    providers=['CPUExecutionProvider']
+                    name="buffalo_s",  # Lightweight model for detection only
+                    providers=["CPUExecutionProvider"],
                 )
                 self._insightface_detector.prepare(ctx_id=-1, det_size=(320, 320))
 
@@ -88,9 +91,7 @@ class FaceDetector:
             # Validate model loaded correctly by testing with a dummy input
             # This will fail if the model architecture doesn't match weights
             test_blob = cv2.dnn.blobFromImage(
-                np.zeros((100, 100, 3), dtype=np.uint8),
-                1.0,
-                mean=(104, 117, 123)
+                np.zeros((100, 100, 3), dtype=np.uint8), 1.0, mean=(104, 117, 123)
             )
             self.detector.setInput(test_blob, "data")
             _ = self.detector.forward("detection_out")
@@ -107,9 +108,7 @@ class FaceDetector:
                 f"3. Check file permissions and disk space"
             ) from e
         except Exception as e:
-            raise RuntimeError(
-                f"Unexpected error loading face detector: {e}"
-            ) from e
+            raise RuntimeError(f"Unexpected error loading face detector: {e}") from e
 
         self.confidence_threshold = confidence_threshold
         # Thread safety: OpenCV DNN has global state and is NOT thread-safe
@@ -117,7 +116,7 @@ class FaceDetector:
         # Note: Callers should also use external locks (see silent_face_liveness.py)
         self._lock = threading.Lock()
 
-    def get_bbox(self, img: np.ndarray) -> List[int]:
+    def get_bbox(self, img: np.ndarray) -> list[int]:
         """
         Detect face and return bounding box.
 
@@ -141,7 +140,7 @@ class FaceDetector:
                 raise ValueError("No face detected in image")
 
             # Get the face with highest confidence
-            face = max(faces, key=lambda f: f.det_score if hasattr(f, 'det_score') else 1.0)
+            face = max(faces, key=lambda f: f.det_score if hasattr(f, "det_score") else 1.0)
 
             # Extract bbox [x, y, width, height]
             bbox = face.bbox.astype(int)  # [x1, y1, x2, y2]
@@ -181,9 +180,7 @@ class FaceDetector:
         confidence = out[max_conf_index, 2]
 
         if confidence < self.confidence_threshold:
-            raise ValueError(
-                f"No face detected with sufficient confidence (max: {confidence:.2f})"
-            )
+            raise ValueError(f"No face detected with sufficient confidence (max: {confidence:.2f})")
 
         # Extract bbox coordinates
         left = out[max_conf_index, 3] * width
@@ -264,9 +261,7 @@ class AntiSpoofPredictor:
         self._loaded_models[model_path] = model
         return model
 
-    def predict_single(
-        self, img: np.ndarray, model_path: str
-    ) -> Tuple[float, float]:
+    def predict_single(self, img: np.ndarray, model_path: str) -> tuple[float, float]:
         """
         Run prediction with a single model.
 
@@ -294,7 +289,7 @@ class AntiSpoofPredictor:
 
     def predict(
         self, image_bytes: bytes, return_bbox: bool = False
-    ) -> Tuple[float, Optional[List[int]]]:
+    ) -> tuple[float, list[int] | None]:
         """
         Predict if image is real or fake using model ensemble.
 
@@ -321,14 +316,10 @@ class AntiSpoofPredictor:
         bbox = self.face_detector.get_bbox(image)
 
         # Get list of models
-        model_files = [
-            f for f in os.listdir(self.model_dir) if f.endswith(".pth")
-        ]
+        model_files = [f for f in os.listdir(self.model_dir) if f.endswith(".pth")]
 
         if not model_files:
-            raise RuntimeError(
-                f"No anti-spoofing models found in {self.model_dir}"
-            )
+            raise RuntimeError(f"No anti-spoofing models found in {self.model_dir}")
 
         # Import crop utility
         from src.antispoof.crop_image import CropImage

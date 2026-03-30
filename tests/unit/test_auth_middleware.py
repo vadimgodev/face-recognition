@@ -1,15 +1,15 @@
 """Tests for APITokenMiddleware (src/middleware/auth.py)."""
-import hmac
-import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 
-from starlette.testclient import TestClient
+import hmac
+from unittest.mock import patch
+
+import pytest
 from starlette.applications import Starlette
 from starlette.responses import PlainTextResponse
 from starlette.routing import Route
+from starlette.testclient import TestClient
 
 from src.middleware.auth import APITokenMiddleware
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -74,7 +74,7 @@ class TestHmacUsage:
             client = TestClient(app, raise_server_exceptions=False)
 
             with patch("src.middleware.auth.hmac.compare_digest", wraps=hmac.compare_digest) as spy:
-                resp = client.get("/api/v1/faces", headers={"x-face-token": VALID_TOKEN})
+                client.get("/api/v1/faces", headers={"x-face-token": VALID_TOKEN})
                 spy.assert_called_once()
 
 

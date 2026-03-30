@@ -1,8 +1,9 @@
 """Door unlock service with provider abstraction."""
 
+from __future__ import annotations
+
 import logging
 from abc import ABC, abstractmethod
-from typing import Optional
 
 import httpx
 
@@ -34,9 +35,7 @@ class MockDoorProvider(DoorUnlockProvider):
 
     async def unlock(self, user_name: str, confidence: float) -> bool:
         """Simulate door unlock."""
-        logger.info(
-            f"[MOCK] Door unlocked for {user_name} (confidence: {confidence:.2f})"
-        )
+        logger.info(f"[MOCK] Door unlocked for {user_name} (confidence: {confidence:.2f})")
         return True
 
 
@@ -114,9 +113,7 @@ class GpioDoorProvider(DoorUnlockProvider):
             self._gpio_available = True
             logger.info(f"GPIO provider initialized on pin {pin}")
         except ImportError:
-            logger.warning(
-                "RPi.GPIO not available. GPIO provider will not function."
-            )
+            logger.warning("RPi.GPIO not available. GPIO provider will not function.")
         except Exception as e:
             logger.error(f"Failed to initialize GPIO: {e}")
 
@@ -164,7 +161,7 @@ class GpioDoorProvider(DoorUnlockProvider):
 class DoorService:
     """Service for managing door unlock operations."""
 
-    def __init__(self, provider: Optional[DoorUnlockProvider] = None):
+    def __init__(self, provider: DoorUnlockProvider | None = None):
         """
         Initialize door service.
 
@@ -189,14 +186,10 @@ class DoorService:
         elif provider_type == "gpio":
             return GpioDoorProvider(pin=17, pulse_duration=1.0)
         else:
-            logger.warning(
-                f"Unknown door provider '{provider_type}', using mock provider"
-            )
+            logger.warning(f"Unknown door provider '{provider_type}', using mock provider")
             return MockDoorProvider()
 
-    async def unlock_if_authorized(
-        self, user_name: str, confidence: float
-    ) -> tuple[bool, str]:
+    async def unlock_if_authorized(self, user_name: str, confidence: float) -> tuple[bool, str]:
         """
         Unlock door if confidence meets threshold.
 

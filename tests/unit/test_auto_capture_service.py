@@ -1,6 +1,8 @@
 """Unit tests for AutoCaptureService."""
-import pytest
+
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 class TestAutoCaptureService:
@@ -44,6 +46,7 @@ class TestAutoCaptureService:
         """Import and instantiate AutoCaptureService inside the method
         so the settings patch is already active."""
         from src.services.auto_capture_service import AutoCaptureService
+
         return AutoCaptureService(
             repository=repo,
             storage=storage,
@@ -53,8 +56,13 @@ class TestAutoCaptureService:
     @pytest.mark.asyncio
     @patch("src.services.auto_capture_service.settings")
     async def test_captures_when_under_limit(
-        self, mock_settings, mock_repo, mock_storage, mock_insightface,
-        matched_face, image_data,
+        self,
+        mock_settings,
+        mock_repo,
+        mock_storage,
+        mock_insightface,
+        matched_face,
+        image_data,
     ):
         mock_settings.auto_capture_enabled = True
         mock_settings.auto_capture_confidence_threshold = 0.8
@@ -79,7 +87,12 @@ class TestAutoCaptureService:
     @pytest.mark.asyncio
     @patch("src.services.auto_capture_service.settings")
     async def test_skips_when_disabled(
-        self, mock_settings, mock_repo, mock_storage, matched_face, image_data,
+        self,
+        mock_settings,
+        mock_repo,
+        mock_storage,
+        matched_face,
+        image_data,
     ):
         mock_settings.auto_capture_enabled = False
 
@@ -97,7 +110,12 @@ class TestAutoCaptureService:
     @pytest.mark.asyncio
     @patch("src.services.auto_capture_service.settings")
     async def test_skips_when_confidence_below_threshold(
-        self, mock_settings, mock_repo, mock_storage, matched_face, image_data,
+        self,
+        mock_settings,
+        mock_repo,
+        mock_storage,
+        matched_face,
+        image_data,
     ):
         mock_settings.auto_capture_enabled = True
         mock_settings.auto_capture_confidence_threshold = 0.9
@@ -116,8 +134,13 @@ class TestAutoCaptureService:
     @pytest.mark.asyncio
     @patch("src.services.auto_capture_service.settings")
     async def test_deletes_oldest_when_at_max(
-        self, mock_settings, mock_repo, mock_storage, mock_insightface,
-        matched_face, image_data,
+        self,
+        mock_settings,
+        mock_repo,
+        mock_storage,
+        mock_insightface,
+        matched_face,
+        image_data,
     ):
         mock_settings.auto_capture_enabled = True
         mock_settings.auto_capture_confidence_threshold = 0.8
@@ -145,7 +168,12 @@ class TestAutoCaptureService:
     @pytest.mark.asyncio
     @patch("src.services.auto_capture_service.settings")
     async def test_returns_false_on_storage_error(
-        self, mock_settings, mock_repo, mock_storage, matched_face, image_data,
+        self,
+        mock_settings,
+        mock_repo,
+        mock_storage,
+        matched_face,
+        image_data,
     ):
         mock_settings.auto_capture_enabled = True
         mock_settings.auto_capture_confidence_threshold = 0.8
@@ -153,7 +181,7 @@ class TestAutoCaptureService:
         mock_settings.storage_backend = "local"
 
         mock_repo.get_verified_photos_count.return_value = 0
-        mock_storage.save.side_effect = IOError("disk full")
+        mock_storage.save.side_effect = OSError("disk full")
 
         service = self._make_service(mock_repo, mock_storage)
         result = await service.capture_if_eligible(
@@ -168,7 +196,12 @@ class TestAutoCaptureService:
     @pytest.mark.asyncio
     @patch("src.services.auto_capture_service.settings")
     async def test_no_embedding_when_no_provider(
-        self, mock_settings, mock_repo, mock_storage, matched_face, image_data,
+        self,
+        mock_settings,
+        mock_repo,
+        mock_storage,
+        matched_face,
+        image_data,
     ):
         mock_settings.auto_capture_enabled = True
         mock_settings.auto_capture_confidence_threshold = 0.8
@@ -194,8 +227,13 @@ class TestAutoCaptureService:
     @pytest.mark.asyncio
     @patch("src.services.auto_capture_service.settings")
     async def test_storage_delete_failure_continues(
-        self, mock_settings, mock_repo, mock_storage, mock_insightface,
-        matched_face, image_data,
+        self,
+        mock_settings,
+        mock_repo,
+        mock_storage,
+        mock_insightface,
+        matched_face,
+        image_data,
     ):
         """Even if deleting the old image from storage fails, capture proceeds."""
         mock_settings.auto_capture_enabled = True

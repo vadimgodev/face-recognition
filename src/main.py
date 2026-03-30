@@ -1,20 +1,21 @@
-from datetime import datetime
-from contextlib import asynccontextmanager
 import logging
+from contextlib import asynccontextmanager
+from datetime import datetime
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.requests import Request
 
-from src.api.routes import router as faces_router, webcam_router
-from src.api.schemas import HealthCheckResponse, ErrorResponse
+from src.api.routes import router as faces_router
+from src.api.routes import webcam_router
+from src.api.schemas import ErrorResponse, HealthCheckResponse
+from src.cache.redis_client import get_redis_client
 from src.config.settings import settings
 from src.database.base import engine
-from src.providers.factory import get_face_provider
-from src.middleware.auth import APITokenMiddleware
-from src.cache.redis_client import get_redis_client
 from src.exceptions import FaceRecognitionError
+from src.middleware.auth import APITokenMiddleware
+from src.providers.factory import get_face_provider
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ async def lifespan(app: FastAPI):
     logger.info("Running startup validation checks...")
     try:
         from src.utils.startup_validation import validate_startup_requirements
+
         validate_startup_requirements(fail_on_error=True)
     except RuntimeError as e:
         logger.error(f"Startup validation failed: {e}")

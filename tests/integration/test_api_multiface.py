@@ -6,15 +6,14 @@ Docker, InsightFace models, or a live database.
 
 import io
 from datetime import datetime
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 from PIL import Image
 
 from src.exceptions import FaceRecognitionError, InvalidImageError
 from src.main import app
-
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -40,23 +39,23 @@ def _make_jpeg_bytes() -> bytes:
 def _make_face(**overrides) -> MagicMock:
     """Build a mock Face ORM object accepted by FaceResponse.model_validate."""
     now = datetime.utcnow()
-    defaults = dict(
-        id=1,
-        user_name="alice",
-        user_email="alice@example.com",
-        provider_name="insightface",
-        provider_face_id="face-uuid-001",
-        image_path="/data/images/face_1.jpg",
-        image_storage="local",
-        quality_score=0.95,
-        confidence_score=0.92,
-        photo_type="enrolled",
-        verified_at=None,
-        verified_confidence=None,
-        verified_by_processor=None,
-        created_at=now,
-        updated_at=now,
-    )
+    defaults = {
+        "id": 1,
+        "user_name": "alice",
+        "user_email": "alice@example.com",
+        "provider_name": "insightface",
+        "provider_face_id": "face-uuid-001",
+        "image_path": "/data/images/face_1.jpg",
+        "image_storage": "local",
+        "quality_score": 0.95,
+        "confidence_score": 0.92,
+        "photo_type": "enrolled",
+        "verified_at": None,
+        "verified_confidence": None,
+        "verified_by_processor": None,
+        "created_at": now,
+        "updated_at": now,
+    }
     defaults.update(overrides)
     face = MagicMock()
     for k, v in defaults.items():

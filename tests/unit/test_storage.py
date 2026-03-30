@@ -1,7 +1,9 @@
 """Tests for storage backends (src/storage/local.py, src/storage/s3.py)."""
+
 import os
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import MagicMock, patch, call
 
 from src.storage.local import LocalStorageBackend
 
@@ -64,6 +66,7 @@ class TestS3ValidatePath:
         """Create an S3StorageBackend with mocked S3FS."""
         with patch("src.storage.s3.S3FS"):
             from src.storage.s3 import S3StorageBackend
+
             return S3StorageBackend(
                 bucket_name="test-bucket",
                 region="us-east-1",

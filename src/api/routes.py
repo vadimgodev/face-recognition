@@ -1,30 +1,30 @@
-import time
+from __future__ import annotations
+
 import asyncio
-import json
 import base64
+import io
+import json
 import logging
-from typing import Optional
+import time
 
-from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, status
-
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-import io
 
-from src.config.settings import settings
 from src.api.schemas import (
-    EnrollFaceResponse,
-    RecognizeFaceResponse,
-    FaceResponse,
-    FaceListResponse,
-    DeleteFaceResponse,
-    FaceMatchResponse,
-    UserPhotosResponse,
     BoundingBoxResponse,
+    DeleteFaceResponse,
     DetectedFaceWithMatches,
-    RecognizeMultipleFacesResponse,
+    EnrollFaceResponse,
+    FaceListResponse,
+    FaceMatchResponse,
+    FaceResponse,
     LivenessCheckResponse,
+    RecognizeFaceResponse,
+    RecognizeMultipleFacesResponse,
+    UserPhotosResponse,
 )
+from src.config.settings import settings
 from src.database.base import get_db
 from src.exceptions import FaceRecognitionError, MultipleFacesDetectedError
 from src.services.face_service import FaceService
@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 async def get_face_service(db: AsyncSession = Depends(get_db)) -> FaceService:
     """Dependency injection for FaceService."""
     return FaceService(db)
+
 
 router = APIRouter(prefix="/api/v1/faces", tags=["faces"])
 webcam_router = APIRouter(prefix="/api/v1/webcam", tags=["webcam"])
@@ -78,7 +79,7 @@ async def enroll_face(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error",
-        )
+        ) from e
 
 
 @router.post(
@@ -156,7 +157,7 @@ async def recognize_face(
                 recognition_time=pure_recognition_time,
             )
 
-        except MultipleFacesDetectedError as e:
+        except MultipleFacesDetectedError:
             if settings.multiface_enabled:
                 # Auto-route to multi-face recognition
                 logger.info("Multiple faces detected, routing to multi-face recognition")
@@ -176,7 +177,10 @@ async def recognize_face(
                 # Remove duplicates by user_name (keep highest similarity)
                 seen_users = {}
                 for face, similarity, captured, proc in all_matches:
-                    if face.user_name not in seen_users or similarity > seen_users[face.user_name][1]:
+                    if (
+                        face.user_name not in seen_users
+                        or similarity > seen_users[face.user_name][1]
+                    ):
                         seen_users[face.user_name] = (face, similarity, captured, proc)
 
                 # Convert back to list
@@ -216,7 +220,7 @@ async def recognize_face(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error",
-        )
+        ) from e
 
 
 @router.post(
@@ -259,9 +263,9 @@ async def recognize_multiple_faces(
         detection_start = time.time()
 
         if roi_enabled:
-            from src.utils.face_processing import ROI, filter_faces_by_roi
             from PIL import Image as PILImage
-            import numpy as np
+
+            from src.utils.face_processing import ROI
 
             # Get image dimensions
             img = PILImage.open(io.BytesIO(image_data))
@@ -282,10 +286,13 @@ async def recognize_multiple_faces(
             for face_result in face_results:
                 bbox = face_result["bbox"]
                 # Create face dict for ROI filtering
-                face_dict = {"bbox": bbox}
 
                 # Check if face overlaps with ROI
-                overlap = roi.overlap_with_bbox(bbox if roi.normalized == False else roi.to_absolute(frame_width, frame_height).overlap_with_bbox(bbox))
+                overlap = roi.overlap_with_bbox(
+                    bbox
+                    if roi.normalized is False
+                    else roi.to_absolute(frame_width, frame_height).overlap_with_bbox(bbox)
+                )
 
                 if overlap >= min_overlap:
                     face_result["roi_overlap"] = overlap
@@ -340,7 +347,6 @@ async def recognize_multiple_faces(
 
         # Calculate execution time
         execution_time = time.time() - start_time
-        recognition_time = detection_time  # For multi-face, detection includes recognition
 
         # Count faces with at least one match
         faces_recognized = sum(1 for f in detected_faces_response if f.total_matches > 0)
@@ -364,7 +370,7 @@ async def recognize_multiple_faces(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error",
-        )
+        ) from e
 
 
 @router.get(
@@ -397,7 +403,7 @@ async def list_faces(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error",
-        )
+        ) from e
 
 
 @router.get(
@@ -431,7 +437,7 @@ async def get_face(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error",
-        )
+        ) from e
 
 
 @router.get(
@@ -466,7 +472,7 @@ async def get_face_image(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error",
-        )
+        ) from e
 
 
 @router.get(
@@ -511,7 +517,7 @@ async def get_user_photos(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error",
-        )
+        ) from e
 
 
 @router.delete(
@@ -534,9 +540,7 @@ async def delete_face(
                 detail=f"Face not found: {face_id}",
             )
 
-        return DeleteFaceResponse(
-            success=True, message=f"Face {face_id} deleted successfully"
-        )
+        return DeleteFaceResponse(success=True, message=f"Face {face_id} deleted successfully")
 
     except HTTPException:
         raise
@@ -547,12 +551,13 @@ async def delete_face(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error",
-        )
+        ) from e
 
 
 # ============================================================================
 # Liveness Detection Endpoints
 # ============================================================================
+
 
 @router.post(
     "/liveness/check",
@@ -562,7 +567,9 @@ async def delete_face(
 )
 async def check_liveness(
     image: UploadFile = File(..., description="Face image file to check"),
-    threshold: float = Form(None, description="Liveness threshold (0.0-1.0, uses config default if not provided)"),
+    threshold: float = Form(
+        None, description="Liveness threshold (0.0-1.0, uses config default if not provided)"
+    ),
 ):
     """
     Check if image contains a real live person using passive liveness detection.
@@ -634,16 +641,18 @@ async def check_liveness(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error",
-        )
+        ) from e
 
 
 # ============================================================================
 # Webcam Endpoints
 # ============================================================================
 
+
 # Webcam task state (encapsulated to avoid bare globals)
 class _WebcamState:
-    task: Optional[asyncio.Task] = None
+    task: asyncio.Task | None = None
+
 
 _webcam_state = _WebcamState()
 
@@ -710,7 +719,7 @@ async def stop_webcam():
     # Wait for task to complete (with timeout)
     try:
         await asyncio.wait_for(_webcam_state.task, timeout=5.0)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         # Force cancel if it doesn't stop gracefully
         _webcam_state.task.cancel()
 
@@ -767,9 +776,10 @@ async def stream_webcam():
     This endpoint provides a real-time video feed with recognition overlays
     for development and monitoring purposes.
     """
+    import cv2
+
     from src.config.settings import settings
     from src.services.webcam_service import get_webcam_service
-    import cv2
 
     webcam_service = get_webcam_service()
 
@@ -795,8 +805,8 @@ async def stream_webcam():
                     continue
 
                 # Encode frame as JPEG
-                _, buffer = cv2.imencode('.jpg', frame)
-                frame_b64 = base64.b64encode(buffer).decode('utf-8')
+                _, buffer = cv2.imencode(".jpg", frame)
+                frame_b64 = base64.b64encode(buffer).decode("utf-8")
 
                 # Create event data
                 event_data = {

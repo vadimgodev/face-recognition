@@ -91,8 +91,6 @@ class CropImage:
                 src_w, src_h, bbox, scale
             )
 
-            img = org_img[
-                left_top_y : right_bottom_y + 1, left_top_x : right_bottom_x + 1
-            ]
+            img = org_img[left_top_y : right_bottom_y + 1, left_top_x : right_bottom_x + 1]
             dst_img = cv2.resize(img, (out_w, out_h))
         return dst_img

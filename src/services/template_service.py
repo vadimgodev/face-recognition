@@ -5,14 +5,15 @@ Computes average template embeddings across a user's enrolled + verified photos
 and calculates similarity scores against query embeddings.
 """
 
+from __future__ import annotations
+
+import logging
 from collections import defaultdict
-from typing import List, Tuple, Optional
 
 import numpy as np
 
 from src.database.models import Face
 from src.database.repository import FaceRepository
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -24,9 +25,7 @@ class TemplateService:
         self.repository = repository
 
     @staticmethod
-    def compute_cosine_similarity(
-        embedding1: List[float], embedding2: List[float]
-    ) -> float:
+    def compute_cosine_similarity(embedding1: list[float], embedding2: list[float]) -> float:
         """
         Compute cosine similarity between two embeddings.
 
@@ -57,11 +56,11 @@ class TemplateService:
 
     async def compute_template_results(
         self,
-        query_embedding: List[float],
-        candidates: List[Tuple[Face, float]],
+        query_embedding: list[float],
+        candidates: list[tuple[Face, float]],
         confidence_threshold: float,
         max_results: int,
-    ) -> List[Tuple[Face, float]]:
+    ) -> list[tuple[Face, float]]:
         """
         For each unique user in candidates:
         1. Fetch all their enrolled faces from the DB
@@ -89,9 +88,7 @@ class TemplateService:
 
         # Batch fetch all user photos in a single query (prevents N+1 problem)
         user_names = list(user_groups.keys())
-        all_faces_batch = await self.repository.get_photos_by_user_names_batch(
-            user_names
-        )
+        all_faces_batch = await self.repository.get_photos_by_user_names_batch(user_names)
 
         # Group fetched faces by user in memory
         user_faces_map: dict[str, list[Face]] = defaultdict(list)
@@ -99,7 +96,7 @@ class TemplateService:
             user_faces_map[face.user_name].append(face)
 
         # Compute template similarity for each user
-        template_results: List[Tuple[Face, float]] = []
+        template_results: list[tuple[Face, float]] = []
 
         for user_name in user_groups:
             all_user_faces = user_faces_map.get(user_name, [])
@@ -137,10 +134,10 @@ class TemplateService:
 
     async def compute_template_results_single_user(
         self,
-        query_embedding: List[float],
+        query_embedding: list[float],
         user_name: str,
         fallback_face: Face,
-    ) -> Optional[Tuple[Face, float]]:
+    ) -> tuple[Face, float] | None:
         """
         Compute template similarity for a single user.
 
@@ -156,29 +153,23 @@ class TemplateService:
         """
         all_user_faces = await self.repository.get_photos_by_user_name(user_name)
         embeddings = [
-            f.embedding_insightface
-            for f in all_user_faces
-            if f.embedding_insightface is not None
+            f.embedding_insightface for f in all_user_faces if f.embedding_insightface is not None
         ]
 
         if not embeddings:
             return None
 
         template_embedding = np.mean(embeddings, axis=0).tolist()
-        template_similarity = self.compute_cosine_similarity(
-            query_embedding, template_embedding
-        )
+        template_similarity = self.compute_cosine_similarity(query_embedding, template_embedding)
 
-        representative_face = self.get_representative_face(
-            all_user_faces, fallback=fallback_face
-        )
+        representative_face = self.get_representative_face(all_user_faces, fallback=fallback_face)
         return representative_face, template_similarity
 
     @staticmethod
     def get_representative_face(
-        faces: List[Face],
+        faces: list[Face],
         prefer_type: str = "enrolled",
-        fallback: Optional[Face] = None,
+        fallback: Face | None = None,
     ) -> Face:
         """
         Return enrolled photo if available, else first face, else fallback.
@@ -196,7 +187,5 @@ class TemplateService:
                 return fallback
             raise ValueError("No faces and no fallback provided")
 
-        preferred = next(
-            (f for f in faces if f.photo_type == prefer_type), None
-        )
+        preferred = next((f for f in faces if f.photo_type == prefer_type), None)
         return preferred if preferred is not None else faces[0]

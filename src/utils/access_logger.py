@@ -1,11 +1,12 @@
 """Structured logging for access events."""
 
-import json
+from __future__ import annotations
+
 import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from pythonjsonlogger import jsonlogger
 
@@ -35,9 +36,7 @@ class AccessLogger:
                 "%(timestamp)s %(event_type)s %(message)s",
                 timestamp=True,
             )
-        return logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
+        return logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
     def _add_stdout_handler(self):
         """Add stdout handler for logging."""
@@ -59,10 +58,10 @@ class AccessLogger:
         result: str,
         confidence: float,
         execution_time_ms: int,
-        user_name: Optional[str] = None,
-        user_email: Optional[str] = None,
-        processor: Optional[str] = None,
-        door_action: Optional[str] = None,
+        user_name: str | None = None,
+        user_email: str | None = None,
+        processor: str | None = None,
+        door_action: str | None = None,
         camera_id: int = 0,
         **extra_fields: Any,
     ):
@@ -117,7 +116,7 @@ class AccessLogger:
     def log_cooldown_event(
         self,
         cooldown_remaining_seconds: float,
-        last_recognized_user: Optional[str] = None,
+        last_recognized_user: str | None = None,
     ):
         """
         Log a cooldown status event.

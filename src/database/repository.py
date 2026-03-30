@@ -1,6 +1,6 @@
-from typing import Optional, List
+from __future__ import annotations
 
-from sqlalchemy import select, delete, func
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.models import Face
@@ -19,14 +19,14 @@ class FaceRepository:
         await self.session.refresh(face)
         return face
 
-    async def get_by_id(self, face_id: int) -> Optional[Face]:
+    async def get_by_id(self, face_id: int) -> Face | None:
         """Get face by ID."""
         result = await self.session.execute(select(Face).where(Face.id == face_id))
         return result.scalar_one_or_none()
 
     async def get_by_provider_face_id(
         self, provider_face_id: str, provider_name: str
-    ) -> Optional[Face]:
+    ) -> Face | None:
         """Get face by provider face ID and provider name."""
         result = await self.session.execute(
             select(Face).where(
@@ -36,9 +36,7 @@ class FaceRepository:
         )
         return result.scalar_one_or_none()
 
-    async def list_all(
-        self, limit: int = 100, offset: int = 0
-    ) -> tuple[List[Face], int]:
+    async def list_all(self, limit: int = 100, offset: int = 0) -> tuple[list[Face], int]:
         """
         List all faces with pagination.
 
@@ -51,10 +49,7 @@ class FaceRepository:
 
         # Get paginated results
         result = await self.session.execute(
-            select(Face)
-            .order_by(Face.created_at.desc())
-            .limit(limit)
-            .offset(offset)
+            select(Face).order_by(Face.created_at.desc()).limit(limit).offset(offset)
         )
         faces = list(result.scalars().all())
 
@@ -67,15 +62,13 @@ class FaceRepository:
         Returns:
             True if deleted, False if not found
         """
-        result = await self.session.execute(
-            delete(Face).where(Face.id == face_id)
-        )
+        result = await self.session.execute(delete(Face).where(Face.id == face_id))
         await self.session.commit()
         return result.rowcount > 0
 
     async def search_by_embedding(
-        self, embedding: List[float], threshold: float = 0.7, limit: int = 10
-    ) -> List[tuple[Face, float]]:
+        self, embedding: list[float], threshold: float = 0.7, limit: int = 10
+    ) -> list[tuple[Face, float]]:
         """
         Search for similar faces by InsightFace embedding vector using pgvector.
 
@@ -97,7 +90,7 @@ class FaceRepository:
         # This gives us 0-1 where 1 is identical
 
         # Build query using pgvector's cosine_distance operator
-        similarity_expr = (1 - Face.embedding_insightface.cosine_distance(embedding) / 2)
+        similarity_expr = 1 - Face.embedding_insightface.cosine_distance(embedding) / 2
 
         query = (
             select(
@@ -114,8 +107,8 @@ class FaceRepository:
         return [(row[0], float(row[1])) for row in result.all()]
 
     async def get_photos_by_user_name(
-        self, user_name: str, photo_type: Optional[str] = None
-    ) -> List[Face]:
+        self, user_name: str, photo_type: str | None = None
+    ) -> list[Face]:
         """
         Get all photos for a user, optionally filtered by photo_type.
 
@@ -138,8 +131,8 @@ class FaceRepository:
         return list(result.scalars().all())
 
     async def get_photos_by_user_names_batch(
-        self, user_names: List[str], photo_type: Optional[str] = None
-    ) -> List[Face]:
+        self, user_names: list[str], photo_type: str | None = None
+    ) -> list[Face]:
         """
         Get all photos for multiple users in a single query.
 
@@ -166,7 +159,7 @@ class FaceRepository:
         result = await self.session.execute(query)
         return list(result.scalars().all())
 
-    async def get_enrollment_photo(self, user_name: str) -> Optional[Face]:
+    async def get_enrollment_photo(self, user_name: str) -> Face | None:
         """
         Get the enrollment photo for a user.
 
@@ -177,15 +170,11 @@ class FaceRepository:
             Face record with photo_type='enrolled' or None
         """
         result = await self.session.execute(
-            select(Face).where(
-                Face.user_name == user_name, Face.photo_type == "enrolled"
-            )
+            select(Face).where(Face.user_name == user_name, Face.photo_type == "enrolled")
         )
         return result.scalar_one_or_none()
 
-    async def get_verified_photos(
-        self, user_name: str, limit: Optional[int] = None
-    ) -> List[Face]:
+    async def get_verified_photos(self, user_name: str, limit: int | None = None) -> list[Face]:
         """
         Get verified photos for a user, ordered by creation date (newest first).
 
@@ -225,7 +214,7 @@ class FaceRepository:
         )
         return result.scalar_one()
 
-    async def get_oldest_verified_photo(self, user_name: str) -> Optional[Face]:
+    async def get_oldest_verified_photo(self, user_name: str) -> Face | None:
         """
         Get the oldest verified photo for a user (for FIFO deletion).
 

@@ -1,12 +1,13 @@
 """Silent-Face anti-spoofing liveness detection provider."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import threading
-from typing import Optional
 
-from src.providers.liveness_base import LivenessProvider, LivenessResult, SpoofingType
 from src.antispoof.predictor import AntiSpoofPredictor
+from src.providers.liveness_base import LivenessProvider, LivenessResult, SpoofingType
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ class SilentFaceLivenessProvider(LivenessProvider):
         self.device_id = device_id
         self.model_dir = model_dir
         self.detector_path = detector_path
-        self._predictor: Optional[AntiSpoofPredictor] = None
+        self._predictor: AntiSpoofPredictor | None = None
         self._lock = threading.Lock()  # Prevent concurrent model loading
 
     def _get_predictor(self) -> AntiSpoofPredictor:
@@ -76,8 +77,7 @@ class SilentFaceLivenessProvider(LivenessProvider):
                         logger.info("✅ Silent-Face anti-spoofing models loaded successfully")
                     except Exception as e:
                         logger.error(
-                            f"Failed to load Silent-Face anti-spoofing models: {e}",
-                            exc_info=True
+                            f"Failed to load Silent-Face anti-spoofing models: {e}", exc_info=True
                         )
                         # Don't set _predictor on failure - allow retry on next call
                         # Propagate the error to caller
@@ -89,9 +89,7 @@ class SilentFaceLivenessProvider(LivenessProvider):
 
         return self._predictor
 
-    async def check_liveness(
-        self, image_bytes: bytes, threshold: float = 0.5
-    ) -> LivenessResult:
+    async def check_liveness(self, image_bytes: bytes, threshold: float = 0.5) -> LivenessResult:
         """
         Check if image contains a real live person (passive detection).
 
@@ -168,7 +166,7 @@ class SilentFaceLivenessProvider(LivenessProvider):
 
 
 # Global singleton instance and locks
-_liveness_provider_instance: Optional[SilentFaceLivenessProvider] = None
+_liveness_provider_instance: SilentFaceLivenessProvider | None = None
 _instance_lock = threading.Lock()
 
 # CRITICAL: Global lock for all OpenCV DNN operations

@@ -6,16 +6,14 @@ startup to ensure all required components are properly configured.
 """
 
 import logging
-import os
 from pathlib import Path
-from typing import List, Tuple
 
 from src.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
 
-def validate_liveness_configuration() -> Tuple[bool, List[str]]:
+def validate_liveness_configuration() -> tuple[bool, list[str]]:
     """
     Validate liveness detection configuration and model files.
 
@@ -36,8 +34,7 @@ def validate_liveness_configuration() -> Tuple[bool, List[str]]:
     # Check provider
     if settings.liveness_provider not in ["silent_face"]:
         errors.append(
-            f"Invalid liveness provider: {settings.liveness_provider}. "
-            f"Supported: silent_face"
+            f"Invalid liveness provider: {settings.liveness_provider}. " f"Supported: silent_face"
         )
 
     # Check threshold
@@ -57,9 +54,7 @@ def validate_liveness_configuration() -> Tuple[bool, List[str]]:
             f"Set LIVENESS_MODEL_DIR or create the directory."
         )
     elif not model_dir.is_dir():
-        errors.append(
-            f"Liveness model path is not a directory: {model_dir}"
-        )
+        errors.append(f"Liveness model path is not a directory: {model_dir}")
 
     if not detector_path.exists():
         errors.append(
@@ -67,9 +62,7 @@ def validate_liveness_configuration() -> Tuple[bool, List[str]]:
             f"Set LIVENESS_DETECTOR_PATH or create the directory."
         )
     elif not detector_path.is_dir():
-        errors.append(
-            f"Liveness detector path is not a directory: {detector_path}"
-        )
+        errors.append(f"Liveness detector path is not a directory: {detector_path}")
 
     # Validate face detector availability (InsightFace OR RetinaFace)
     # Primary: InsightFace buffalo (automatically downloaded)
@@ -79,7 +72,8 @@ def validate_liveness_configuration() -> Tuple[bool, List[str]]:
 
     # Check if InsightFace is available (preferred detector)
     try:
-        import insightface
+        import insightface  # noqa: F401
+
         has_insightface = True
         logger.info("✅ InsightFace available for face detection (primary)")
     except ImportError:
@@ -134,9 +128,7 @@ def validate_liveness_configuration() -> Tuple[bool, List[str]]:
             # Validate each model file
             for pth_file in pth_files:
                 if pth_file.stat().st_size == 0:
-                    errors.append(
-                        f"Anti-spoofing model is empty: {pth_file}"
-                    )
+                    errors.append(f"Anti-spoofing model is empty: {pth_file}")
                 elif pth_file.stat().st_size < 100_000:  # Less than 100KB
                     errors.append(
                         f"Anti-spoofing model seems too small: {pth_file} "
@@ -212,8 +204,7 @@ def validate_startup_requirements(fail_on_error: bool = True) -> bool:
 if __name__ == "__main__":
     # Allow running this module directly for validation
     logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
 
     try:

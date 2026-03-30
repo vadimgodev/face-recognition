@@ -1,8 +1,9 @@
 import logging
-from src.providers.base import FaceProvider
-from src.providers.aws_rekognition import AWSRekognitionProvider
-from src.providers.insightface_provider import InsightFaceProvider
+
 from src.config.settings import settings
+from src.providers.aws_rekognition import AWSRekognitionProvider
+from src.providers.base import FaceProvider
+from src.providers.insightface_provider import InsightFaceProvider
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +52,7 @@ class ProviderFactory:
         if not provider_class:
             available = ", ".join(cls._providers.keys())
             raise ValueError(
-                f"Unsupported provider: {provider_name}. "
-                f"Available providers: {available}"
+                f"Unsupported provider: {provider_name}. " f"Available providers: {available}"
             )
         return provider_class()
 

@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import String, DateTime, Float, Text, Index, BigInteger
-from sqlalchemy.orm import Mapped, mapped_column
 from pgvector.sqlalchemy import Vector
+from sqlalchemy import BigInteger, DateTime, Float, Index, String, Text
+from sqlalchemy.orm import Mapped, mapped_column
 
 from src.database.base import Base
 
@@ -14,9 +16,7 @@ class Face(Base):
     __tablename__ = "faces"
 
     # Primary key - auto-increment BIGINT
-    id: Mapped[int] = mapped_column(
-        BigInteger, primary_key=True, autoincrement=True
-    )
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
 
     # User information
     user_name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -50,9 +50,7 @@ class Face(Base):
 
     # Image information
     image_path: Mapped[str] = mapped_column(String(500), nullable=False)
-    image_storage: Mapped[str] = mapped_column(
-        String(50), nullable=False
-    )  # 'local' or 's3'
+    image_storage: Mapped[str] = mapped_column(String(50), nullable=False)  # 'local' or 's3'
 
     # Quality metrics
     quality_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -69,13 +67,13 @@ class Face(Base):
         Float, nullable=True, comment="Recognition confidence score"
     )
     verified_by_processor: Mapped[Optional[str]] = mapped_column(
-        String(100), nullable=True, comment="Recognition processor used (e.g., 'antelopev2', 'aws_rekognition')"
+        String(100),
+        nullable=True,
+        comment="Recognition processor used (e.g., 'antelopev2', 'aws_rekognition')",
     )  # Tracks which model/service was used for recognition
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.utcnow
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
     )
