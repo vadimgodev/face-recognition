@@ -1,8 +1,9 @@
 # Face Recognition API
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-236%20passed-brightgreen)](tests/)
-[![Coverage](https://img.shields.io/badge/coverage-34%25-yellow)](tests/)
+[![Python](https://img.shields.io/badge/python-3.13-blue)](https://python.org)
+[![Tests](https://img.shields.io/badge/tests-527%20passed-brightgreen)](tests/)
+[![Coverage](https://img.shields.io/badge/coverage-63%25-green)](tests/)
 
 A production-ready face recognition system with enrollment and identification capabilities. Built with FastAPI, PostgreSQL, InsightFace, and AWS Rekognition, featuring a modern Vue.js frontend and enterprise-grade two-layer authentication.
 
