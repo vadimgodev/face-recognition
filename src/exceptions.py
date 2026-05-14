@@ -44,8 +44,10 @@ class LivenessCheckFailedError(FaceRecognitionError):
         self.spoofing_type = spoofing_type
         self.threshold = threshold
         super().__init__(
-            f"Liveness check failed: spoofing detected (type={spoofing_type}, "
-            f"score={confidence:.3f}, threshold={threshold})",
+            f"Liveness check failed: Image appears to be fake "
+            f"(spoofing type: {spoofing_type}, "
+            f"confidence: {confidence:.3f}, "
+            f"threshold: {threshold})",
             status_code=400,
         )
 

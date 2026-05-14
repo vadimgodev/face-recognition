@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from PIL import Image
 
+from src.exceptions import LivenessCheckFailedError
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -1824,7 +1826,7 @@ class TestFaceServiceCheckLiveness:
 
         service = self._build_service()
         with patch.object(service, "_get_liveness_provider", return_value=mock_liveness):
-            with pytest.raises(ValueError, match="spoofing detected"):
+            with pytest.raises(LivenessCheckFailedError, match="Liveness check failed"):
                 await service._check_liveness(b"image")
 
     @pytest.mark.asyncio
@@ -1874,7 +1876,7 @@ class TestFaceServiceCheckLiveness:
 
         service = self._build_service()
         with patch.object(service, "_get_liveness_provider", return_value=mock_liveness):
-            with pytest.raises(ValueError, match="Liveness check failed"):
+            with pytest.raises(LivenessCheckFailedError, match="Liveness check failed"):
                 await service._check_liveness(b"image")
 
     @pytest.mark.asyncio
@@ -1893,7 +1895,7 @@ class TestFaceServiceCheckLiveness:
 
         service = self._build_service()
         with patch.object(service, "_get_liveness_provider", return_value=mock_liveness):
-            with pytest.raises(ValueError, match="Liveness detection failed"):
+            with pytest.raises(LivenessCheckFailedError, match="Liveness check failed"):
                 await service._check_liveness(b"image")
 
     @pytest.mark.asyncio

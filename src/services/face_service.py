@@ -10,6 +10,11 @@ from src.cache.redis_client import get_redis_client
 from src.config.settings import settings
 from src.database.models import Face
 from src.database.repository import FaceRepository
+from src.exceptions import (
+    InvalidImageError,
+    LivenessCheckFailedError,
+    NoFaceDetectedError,
+)
 from src.providers.base import FaceMetadata, FaceProvider
 from src.providers.collection_manager import get_collection_manager
 from src.providers.factory import get_face_provider
@@ -107,9 +112,13 @@ class FaceService:
         cached_result = await cache.get_json(cache_key)
         if cached_result is not None:
             logger.debug(f"Liveness cache HIT for image hash {image_hash[:16]}")
-            # Cached result format: {"is_real": bool, "error": str or None}
             if not cached_result["is_real"]:
-                raise ValueError(cached_result["error"])
+                # Cache only stores spoof failures (provider errors aren't cached)
+                raise LivenessCheckFailedError(
+                    confidence=0.0,
+                    spoofing_type="cached",
+                    threshold=detection_threshold,
+                )
             return
 
         logger.debug(f"Liveness cache MISS for image hash {image_hash[:16]}")
@@ -118,30 +127,41 @@ class FaceService:
             result = await liveness_provider.check_liveness(image_data, detection_threshold)
 
             if not result.is_real:
-                error_msg = (
-                    f"Liveness check failed: Image appears to be fake "
-                    f"(spoofing type: {result.spoofing_type.value}, "
-                    f"confidence: {result.confidence:.3f}, "
-                    f"threshold: {detection_threshold})"
-                )
                 logger.warning(
                     f"Liveness check failed: spoofing detected "
                     f"(confidence: {result.confidence:.3f}, threshold: {detection_threshold})"
                 )
+                exc = LivenessCheckFailedError(
+                    confidence=result.confidence,
+                    spoofing_type=result.spoofing_type.value,
+                    threshold=detection_threshold,
+                )
                 # Cache the failure (TTL: 60 seconds)
-                await cache.set_json(cache_key, {"is_real": False, "error": error_msg}, ex=60)
-                raise ValueError(error_msg)
+                await cache.set_json(cache_key, {"is_real": False, "error": exc.message}, ex=60)
+                raise exc
 
             logger.info(f"Liveness check passed (confidence: {result.confidence:.3f})")
             # Cache the success (TTL: 60 seconds)
             await cache.set_json(cache_key, {"is_real": True, "error": None}, ex=60)
 
-        except ValueError:
-            # Re-raise liveness failures
+        except LivenessCheckFailedError:
             raise
+        except ValueError as e:
+            # Inner provider raises ValueError for "No face detected" / invalid image.
+            # Map to typed exceptions so the global handler returns 400 with a usable detail.
+            err = str(e)
+            # Inner provider already prefixes with "Liveness check failed: " — avoid duplicating
+            prefix = "Liveness check failed: "
+            detail = err if err.startswith(prefix) else f"{prefix}{err}"
+            logger.warning(f"Liveness provider validation error: {err}")
+            if "No face detected" in err:
+                raise NoFaceDetectedError(detail) from e
+            raise InvalidImageError(detail) from e
         except Exception as e:
             logger.error(f"Liveness check error: {e}", exc_info=True)
-            raise ValueError(f"Liveness detection failed: {e}") from e
+            raise LivenessCheckFailedError(
+                confidence=0.0, spoofing_type="error", threshold=detection_threshold
+            ) from e
 
     async def enroll_face(
         self,
