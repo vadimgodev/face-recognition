@@ -1,0 +1,62 @@
+name: Tag release
+
+# On every push to main (i.e. a merged PR), bump the patch version and
+# create a matching tag + GitHub release. Override the bump for a given
+# merge by putting #minor or #major in the merge commit message.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tag-release
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Compute next version
+        id: ver
+        run: |
+          set -euo pipefail
+          if git describe --exact-match --tags HEAD >/dev/null 2>&1; then
+            echo "HEAD is already tagged $(git describe --tags HEAD); nothing to do."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          latest=$(git tag -l 'v*' --sort=-v:refname | head -1)
+          latest=${latest:-v0.0.0}
+          base=${latest#v}
+          major=${base%%.*}; rest=${base#*.}; minor=${rest%%.*}; patch=${rest#*.}
+          msg=$(git log -1 --pretty=%B)
+          case "$msg" in
+            *"#major"*) major=$((major+1)); minor=0; patch=0 ;;
+            *"#minor"*) minor=$((minor+1)); patch=0 ;;
+            *)          patch=$((patch+1)) ;;
+          esac
+          next="v${major}.${minor}.${patch}"
+          echo "Latest: $latest -> Next: $next"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+
+      - name: Create tag and release
+        if: steps.ver.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          next="${{ steps.ver.outputs.next }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$next" -m "$next"
+          git push origin "$next"
+          gh release create "$next" --title "$next" --generate-notes
