@@ -28,7 +28,7 @@ redis==7.0.1
 hiredis==3.4.0
 
 # Image Processing
-Pillow==11.3.0
+Pillow==12.3.0
 opencv-python==4.13.0.92
 
 # Face Recognition (InsightFace)
