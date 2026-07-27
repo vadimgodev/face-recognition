@@ -1,7 +1,11 @@
-### Face Recognition API - HTTP Client Requests
-### Base URL
+### FaceGuard API - HTTP Client Requests
+### Base URL (use http://localhost when running behind Traefik)
 @baseUrl = http://localhost:8000
 @apiBase = {{baseUrl}}/api/v1
+### API token: must equal SECRET_KEY from .env. When SECRET_KEY is set, add
+###   x-face-token: {{token}}
+### to every request below (and Basic Auth credentials when behind Traefik).
+@token = your-secret-key
 
 ################################################################################
 ### Health Check

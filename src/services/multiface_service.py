@@ -7,12 +7,14 @@ Two-stage pipeline:
 """
 
 import logging
+import time
 from io import BytesIO
 
 import numpy as np
 from PIL import Image
 
 from src.config.settings import settings
+from src.exceptions import ConfigurationError
 from src.services.auto_capture_service import AutoCaptureService
 from src.services.recognition_strategies import RecognitionStrategy
 from src.utils.face_processing import crop_face_from_bbox
@@ -47,7 +49,7 @@ class MultiFaceService:
         image_data: bytes,
         max_results_per_face: int = 5,
         confidence_threshold: float = 0.8,
-    ) -> tuple[list[dict], str]:
+    ) -> tuple[list[dict], str, float, float]:
         """
         Recognize multiple faces in a single image.
 
@@ -61,17 +63,20 @@ class MultiFaceService:
             confidence_threshold: Minimum confidence threshold (0-1)
 
         Returns:
-            Tuple of (face_results, processor_name):
+            Tuple of (face_results, processor_name, detection_time, recognition_time):
             - face_results: List of dicts with face_id, bbox, confidence, matches
             - processor_name: Overall processor used
+            - detection_time: Measured time spent in stage 1 (seconds)
+            - recognition_time: Measured time spent in stage 2 (seconds); 0.0 if it never ran
         """
         if not self.insightface_provider:
-            raise ValueError(
-                "Multi-face recognition requires InsightFace provider. "
-                "Set HYBRID_MODE to 'insightface_only', 'insightface_aws', or 'smart_hybrid'."
+            raise ConfigurationError(
+                "Multi-face recognition requires a local embedding provider. "
+                "Set RECOGNITION_MODE to 'local' or 'hybrid'."
             )
 
         # Step 1: FAST DETECTION
+        detection_start = time.time()
         image_pil = Image.open(BytesIO(image_data))
         image_np = np.array(image_pil.convert("RGB"))
         image_bgr = image_np[:, :, ::-1].copy()  # RGB -> BGR for OpenCV
@@ -93,11 +98,15 @@ class MultiFaceService:
             )
             detected_bboxes = [f["bbox"] for f in detected_faces_insightface]
 
+        detection_time = time.time() - detection_start
+
         if not detected_bboxes:
             return (
                 [],
                 f"detection:{settings.face_detection_method}"
-                f"+recognition:{settings.hybrid_mode}",
+                f"+recognition:{settings.recognition_mode}",
+                detection_time,
+                0.0,
             )
 
         # Limit number of faces
@@ -111,9 +120,11 @@ class MultiFaceService:
 
         # Step 2: ACCURATE RECOGNITION for each detected face
         processor_name = (
-            f"detection:{settings.face_detection_method}" f"+recognition:{settings.hybrid_mode}"
+            f"detection:{settings.face_detection_method}"
+            f"+recognition:{settings.recognition_mode}"
         )
         face_results = []
+        recognition_start = time.time()
 
         for bbox in detected_bboxes:
             face_result = await self._process_single_detected_face(
@@ -124,13 +135,15 @@ class MultiFaceService:
             )
             face_results.append(face_result)
 
+        recognition_time = time.time() - recognition_start
+
         logger.info(
             f"Processed {len(face_results)} faces, "
             f"found matches for "
             f"{sum(1 for f in face_results if f['matches'])} faces"
         )
 
-        return face_results, processor_name
+        return face_results, processor_name, detection_time, recognition_time
 
     async def _process_single_detected_face(
         self,
@@ -187,7 +200,7 @@ class MultiFaceService:
         # Format matches and auto-capture for best match
         formatted_matches = []
         best_match_face = None
-        best_match_processor = None
+        best_match_processor: str = "unknown"
         best_match_similarity = 0.0
 
         for match_data in matches:
@@ -238,13 +251,11 @@ class MultiFaceService:
 
 def _compute_match_processor(aws_used: bool) -> str:
     """Determine the processor name for a match based on mode and AWS usage."""
-    if settings.hybrid_mode == "smart_hybrid":
+    if settings.recognition_mode == "hybrid":
         if aws_used:
             return f"{settings.insightface_model}+aws"
         return settings.insightface_model
-    elif settings.hybrid_mode == "insightface_aws":
-        return f"{settings.insightface_model}+aws"
-    elif settings.hybrid_mode == "insightface_only":
+    elif settings.recognition_mode == "local":
         return settings.insightface_model
     else:
         return "aws_rekognition"

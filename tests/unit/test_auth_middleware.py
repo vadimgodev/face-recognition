@@ -44,6 +44,9 @@ def _make_app(secret_key: str = VALID_TOKEN) -> Starlette:
     async def _webcam_stream(request):
         return PlainTextResponse("ok-webcam")
 
+    async def _user_photos(request):
+        return PlainTextResponse("ok-user-photos")
+
     app = Starlette(
         routes=[
             Route("/", _index),
@@ -53,6 +56,7 @@ def _make_app(secret_key: str = VALID_TOKEN) -> Starlette:
             Route("/openapi.json", _openapi),
             Route("/api/v1/faces", _protected),
             Route("/api/v1/faces/{face_id}/image", _image_endpoint),
+            Route("/api/v1/faces/user/{name}/photos", _user_photos),
             Route("/api/v1/webcam/stream", _webcam_stream),
         ],
     )
@@ -128,6 +132,19 @@ class TestAuthRejection:
 
             assert resp.status_code == 401
 
+    def test_non_ascii_token_returns_401_not_500(self):
+        """Regression: non-ASCII tokens crashed hmac.compare_digest with TypeError."""
+        with patch("src.middleware.auth.settings") as mock_settings:
+            mock_settings.secret_key = VALID_TOKEN
+            client = TestClient(_make_app(), raise_server_exceptions=False)
+            resp = client.get(
+                "/api/v1/faces",
+                # bytes: emulate a raw client sending a non-ASCII header
+                headers={"x-face-token": "s\xe9cret".encode("latin-1")},
+            )
+
+            assert resp.status_code == 401
+
 
 # ---------------------------------------------------------------------------
 # Tests: valid token passes through
@@ -188,6 +205,22 @@ class TestImageEndpointBypass:
 
             assert resp.status_code == 200
             assert resp.text == "ok-image"
+
+    def test_path_merely_containing_image_requires_auth(self):
+        """Regression: substring matching let /user/image/photos bypass auth."""
+        with patch("src.middleware.auth.settings") as mock_settings:
+            mock_settings.secret_key = VALID_TOKEN
+            client = TestClient(_make_app(), raise_server_exceptions=False)
+
+            resp = client.get("/api/v1/faces/user/image/photos")
+            assert resp.status_code == 401
+
+            resp_ok = client.get(
+                "/api/v1/faces/user/image/photos",
+                headers={"x-face-token": VALID_TOKEN},
+            )
+            assert resp_ok.status_code == 200
+            assert resp_ok.text == "ok-user-photos"
 
 
 # ---------------------------------------------------------------------------

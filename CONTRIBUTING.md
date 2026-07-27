@@ -1,4 +1,4 @@
-# Contributing to Face Recognition API
+# Contributing to FaceGuard
 
 Thank you for your interest in contributing! This guide will help you get started.
 
@@ -6,7 +6,7 @@ Thank you for your interest in contributing! This guide will help you get starte
 
 ### Prerequisites
 
-- Python 3.9+
+- Python 3.13+
 - Docker & Docker Compose 2.0+
 - Node.js 20+ (for frontend development)
 
@@ -14,8 +14,8 @@ Thank you for your interest in contributing! This guide will help you get starte
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/face-recognition-api.git
-cd face-recognition-api
+git clone https://github.com/vadimgodev/face-recognition.git faceguard
+cd faceguard
 
 # Create virtual environment
 python -m venv .venv

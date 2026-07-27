@@ -137,11 +137,13 @@
             {{ event.processor || '-' }}
           </span>
           <span class="event-timing">
-            <span class="timing-detail" v-if="event.detection_time">Det: {{ (event.detection_time * 1000).toFixed(0) }}ms</span>
-            <span class="timing-detail" v-if="event.recognition_time">Rec: {{ (event.recognition_time * 1000).toFixed(0) }}ms</span>
+            <span class="timing-detail" v-if="event.detection_time != null">Det: {{ (event.detection_time * 1000).toFixed(0) }}ms</span>
+            <span class="timing-detail" v-else>Det: —</span>
+            <span class="timing-detail" v-if="event.recognition_time != null">Rec: {{ (event.recognition_time * 1000).toFixed(0) }}ms</span>
+            <span class="timing-detail" v-else>Rec: —</span>
             <span class="timing-total" v-if="event.execution_time">{{ (event.execution_time * 1000).toFixed(0) }}ms</span>
           </span>
-          <span class="event-action">{{ event.door_action }}</span>
+          <span class="event-action">{{ event.trigger_action }}</span>
         </div>
         <div v-if="recentEvents.length === 0" class="no-events">
           No events yet
@@ -348,11 +350,11 @@ const captureBrowserFrame = async () => {
             result: isSpoofing ? 'spoofing_detected' : 'liveness_detection_failed',
             user_name: isSpoofing ? '🚫 SPOOFING BLOCKED' : '⚠️ DETECTION FAILED',
             confidence: 0.0,
-            door_action: 'denied',
+            trigger_action: 'denied',
             processor: '-',
             execution_time: 0,
-            detection_time: 0,
-            recognition_time: 0,
+            detection_time: null,
+            recognition_time: null,
             notes: errorDetail
           })
         } else {
@@ -397,11 +399,11 @@ const processRecognitionResult = (result) => {
     result: 'success',
     user_name: face.user_name,
     confidence: similarity,
-    door_action: similarity >= 0.8 ? 'unlocked' : 'denied',
+    trigger_action: similarity >= 0.8 ? 'fired' : 'denied',
     processor: bestMatch.processor || result.processor || 'unknown',  // Prioritize match processor (shows AWS usage)
     execution_time: result.execution_time || 0,
-    detection_time: result.detection_time || 0,
-    recognition_time: result.recognition_time || 0,
+    detection_time: result.detection_time ?? null,
+    recognition_time: result.recognition_time ?? null,
   })
 
   if (similarity >= 0.8) {

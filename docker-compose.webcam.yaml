@@ -4,7 +4,7 @@
 # On macOS/Windows, run webcam_daemon.py directly on the host instead.
 #
 # Usage (Linux):
-#   docker-compose -f docker-compose.yaml -f docker-compose.webcam.yaml up -d
+#   docker compose -f docker-compose.yaml -f docker-compose.webcam.yaml up -d
 #
 # This file adds webcam-specific configurations to the main docker-compose.yaml
 
@@ -31,7 +31,7 @@ services:
   #   build:
   #     context: .
   #     dockerfile: Dockerfile
-  #   container_name: face-recognition-webcam
+  #   container_name: faceguard-webcam
   #   devices:
   #     - /dev/video0:/dev/video0
   #   env_file:
@@ -39,6 +39,6 @@ services:
   #   depends_on:
   #     - app
   #   networks:
-  #     - face-recognition-network
+  #     - faceguard-network
   #   restart: unless-stopped
   #   command: python webcam_daemon.py --camera 0 --mode daemon

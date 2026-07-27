@@ -161,7 +161,7 @@ class TestMultiFaceRecognitionAPI:
             response = await client.get("/")
             assert response.status_code == 200
             data = response.json()
-            assert data["name"] == "Face Recognition API"
+            assert data["name"] == "FaceGuard API"
             assert "version" in data
             assert "docs" in data
 
@@ -200,6 +200,8 @@ class TestMultiFaceRecognitionAPI:
                 },
             ],
             "antelopev2",
+            0.01,
+            0.02,
         )
 
         async with AsyncClient(transport=_transport(), base_url="http://test") as client:
@@ -261,6 +263,8 @@ class TestMultiFaceRecognitionAPI:
                 },
             ],
             "antelopev2",
+            0.01,
+            0.02,
         )
 
         async with AsyncClient(transport=_transport(), base_url="http://test") as client:
@@ -293,6 +297,8 @@ class TestMultiFaceRecognitionAPI:
                 },
             ],
             "antelopev2",
+            0.01,
+            0.02,
         )
 
         async with AsyncClient(transport=_transport(), base_url="http://test") as client:
@@ -340,7 +346,7 @@ class TestMultiFaceRecognitionAPI:
         self, test_image_bytes, api_token, mock_face_service, _override_service
     ):
         """Test response when no faces are detected in the image."""
-        mock_face_service.recognize_multiple_faces.return_value = ([], "antelopev2")
+        mock_face_service.recognize_multiple_faces.return_value = ([], "antelopev2", 0.01, 0.0)
 
         async with AsyncClient(transport=_transport(), base_url="http://test") as client:
             response = await client.post(
@@ -376,3 +382,48 @@ class TestMultiFaceRecognitionAPI:
         assert response.status_code == 502
         data = response.json()
         assert data["success"] is False
+
+    async def test_recognize_multiple_with_roi_filtering(
+        self, test_image_bytes, api_token, mock_face_service, _override_service
+    ):
+        """Regression: ROI filtering must not 500 (broken overlap expression)."""
+        face = _make_face()
+        bbox = _make_bbox()
+
+        mock_face_service.recognize_multiple_faces.return_value = (
+            [
+                {
+                    "face_id": "face_0",
+                    "bbox": bbox,
+                    "det_confidence": 0.99,
+                    "matches": [(face, 0.92, False, "antelopev2")],
+                },
+            ],
+            "antelopev2",
+            0.01,
+            0.02,
+        )
+
+        async with AsyncClient(transport=_transport(), base_url="http://test") as client:
+            response = await client.post(
+                "/api/v1/faces/recognize-multiple",
+                headers={"x-face-token": api_token},
+                files={"image": ("test.jpg", test_image_bytes, "image/jpeg")},
+                data={
+                    "max_results_per_face": 5,
+                    "confidence_threshold": 0.7,
+                    "roi_enabled": "true",
+                    # Whole-frame ROI: the mocked face must survive filtering
+                    "roi_x": 0.0,
+                    "roi_y": 0.0,
+                    "roi_width": 1.0,
+                    "roi_height": 1.0,
+                    "min_overlap": 0.1,
+                },
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["total_faces_detected"] == 1
+        assert data["total_faces_recognized"] == 1

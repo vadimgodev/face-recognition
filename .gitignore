@@ -54,6 +54,7 @@ htmlcov/
 .coverage
 .coverage.*
 .pytest_cache/
+.ruff_cache/
 coverage.xml
 
 # Data & images (never commit face photos)
@@ -63,8 +64,7 @@ data/
 *.png
 
 # Sample data (may contain personal photos)
-sample_data/*
-!sample_data/README.md
+sample_data/
 
 # Resources (downloaded models)
 resources/
@@ -88,6 +88,7 @@ web/dist/
 .swarm/
 .mcp.json
 .rtk/
+docs/superpowers/
 
 # Let's Encrypt certificates
 letsencrypt/

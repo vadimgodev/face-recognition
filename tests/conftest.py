@@ -25,8 +25,7 @@ def setup_test_environment():
     # Override environment variables for testing BEFORE importing settings
     os.environ["STORAGE_LOCAL_PATH"] = str(test_storage_path)
     os.environ["STORAGE_BACKEND"] = "local"
-    os.environ["USE_HYBRID_RECOGNITION"] = "false"
-    os.environ["FACE_PROVIDER"] = "insightface"
+    os.environ["RECOGNITION_MODE"] = "local"
 
     # Reload settings to pick up new environment variables
     import src.config.settings as settings_module
@@ -75,7 +74,7 @@ def mock_face():
     face.provider_collection_id = "default"
     rng = np.random.RandomState(42)
     emb = rng.randn(512).astype(np.float64)
-    face.embedding_insightface = (emb / np.linalg.norm(emb)).tolist()
+    face.embedding_local = (emb / np.linalg.norm(emb)).tolist()
     face.photo_type = "enrolled"
     face.image_path = "faces/test_user/enrolled.jpg"
     face.image_storage = "local"

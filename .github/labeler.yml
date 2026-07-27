@@ -1,0 +1,15 @@
+backend:
+  - changed-files:
+      - any-glob-to-any-file: ["src/**", "alembic/**", "requirements*.txt"]
+frontend:
+  - changed-files:
+      - any-glob-to-any-file: ["web/**"]
+docs:
+  - changed-files:
+      - any-glob-to-any-file: ["docs/**", "README.md", "*.md"]
+infra:
+  - changed-files:
+      - any-glob-to-any-file: ["Dockerfile", "docker-compose*.yaml", ".github/**", "Makefile"]
+tests:
+  - changed-files:
+      - any-glob-to-any-file: ["tests/**"]

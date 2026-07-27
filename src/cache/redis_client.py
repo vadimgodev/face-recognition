@@ -62,6 +62,7 @@ class RedisCache:
         """Get value from Redis."""
         if not self._is_available():
             return None
+        assert self._client is not None
 
         try:
             value = await self._client.get(key)
@@ -74,6 +75,7 @@ class RedisCache:
         """Set value in Redis with optional expiration."""
         if not self._is_available():
             return False
+        assert self._client is not None
 
         try:
             await self._client.set(key, value, ex=ex)
@@ -90,6 +92,7 @@ class RedisCache:
         """Delete one or more keys."""
         if not self._is_available():
             return False
+        assert self._client is not None
 
         try:
             await self._client.delete(*keys)
@@ -102,6 +105,7 @@ class RedisCache:
         """Check if key exists."""
         if not self._is_available():
             return False
+        assert self._client is not None
 
         try:
             result = await self._client.exists(key)
@@ -140,6 +144,7 @@ class RedisCache:
         """Delete all keys matching pattern."""
         if not self._is_available():
             return 0
+        assert self._client is not None
 
         try:
             keys = []

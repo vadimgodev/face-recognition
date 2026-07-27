@@ -7,6 +7,7 @@ as "verified" photos using a FIFO stack per user.
 
 import hashlib
 import logging
+import uuid
 from datetime import datetime
 
 from src.config.settings import settings
@@ -94,9 +95,9 @@ class AutoCaptureService:
                 user_email=matched_face.user_email,
                 user_metadata=matched_face.user_metadata,
                 provider_name=matched_face.provider_name,
-                provider_face_id=f"verified_{timestamp}",
+                provider_face_id=f"verified_{timestamp}_{uuid.uuid4().hex[:8]}",
                 provider_collection_id=matched_face.provider_collection_id,
-                embedding_insightface=embedding,
+                embedding_local=embedding,
                 embedding_model=settings.insightface_model if embedding else None,
                 image_path=image_path,
                 image_storage=settings.storage_backend,
@@ -112,6 +113,12 @@ class AutoCaptureService:
 
             return True
 
-        except Exception:
-            # Don't fail recognition if auto-capture fails
+        except Exception as e:
+            # Don't fail recognition if auto-capture fails, but roll the session
+            # back so a failed insert can't poison subsequent queries.
+            logger.warning(f"Auto-capture failed for {matched_face.user_name}: {e}")
+            try:
+                await self.repository.session.rollback()
+            except Exception:
+                pass
             return False

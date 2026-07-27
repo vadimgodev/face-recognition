@@ -1,5 +1,5 @@
 {
-  "name": "web",
+  "name": "faceguard-web",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -9,13 +9,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@vueuse/core": "^14.0.0",
-    "axios": "^1.12.2",
-    "vue": "^3.5.22",
-    "vue-router": "^4.6.3"
+    "@vueuse/core": "^14.3.0",
+    "axios": "^1.18.1",
+    "vue": "^3.5.40",
+    "vue-router": "^4.6.4"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^6.0.1",
-    "vite": "^7.1.7"
+    "@vitejs/plugin-vue": "^6.0.8",
+    "vite": "^7.3.6"
   }
 }

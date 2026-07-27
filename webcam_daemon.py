@@ -10,11 +10,13 @@ from pathlib import Path
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
+
 env_path = Path(__file__).parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
-from src.config.settings import settings
-from src.services.webcam_service import get_webcam_service
+# These imports must come after load_dotenv() so settings pick up .env values
+from src.config.settings import settings  # noqa: E402
+from src.services.webcam_service import get_webcam_service  # noqa: E402
 
 # Configure logging
 logging.basicConfig(
@@ -62,18 +64,10 @@ class WebcamDaemon:
         logger.info(f"Mode: {self.mode}")
         logger.info(f"Camera ID: {self.camera_id}")
         logger.info(f"Capture Rate: {settings.webcam_fps} FPS")
-        logger.info(
-            f"Cooldown After Success: {settings.webcam_success_cooldown_seconds}s"
-        )
-        logger.info(
-            f"Door Unlock Provider: {settings.door_unlock_provider}"
-        )
-        logger.info(
-            f"Unlock Confidence Threshold: {settings.door_unlock_confidence_threshold}"
-        )
-        logger.info(
-            f"Access Log Output: {settings.access_log_output}"
-        )
+        logger.info(f"Cooldown After Success: {settings.webcam_success_cooldown_seconds}s")
+        logger.info(f"Trigger Provider: {settings.trigger_provider}")
+        logger.info(f"Trigger Confidence Threshold: {settings.trigger_confidence_threshold}")
+        logger.info(f"Access Log Output: {settings.access_log_output}")
         logger.info("")
         logger.info("Security Settings:")
         if settings.liveness_enabled:
@@ -83,10 +77,7 @@ class WebcamDaemon:
                 f"provider: {settings.liveness_provider})"
             )
         else:
-            logger.info(
-                f"  ⚠️  Liveness Detection: DISABLED "
-                f"(spoofing attacks may succeed)"
-            )
+            logger.info("  ⚠️  Liveness Detection: DISABLED " "(spoofing attacks may succeed)")
         logger.info("=" * 60)
 
         # Get webcam service instance
@@ -110,7 +101,7 @@ class WebcamDaemon:
         if not capture_task.done():
             try:
                 await asyncio.wait_for(capture_task, timeout=5.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 capture_task.cancel()
                 try:
                     await capture_task
@@ -122,9 +113,7 @@ class WebcamDaemon:
 
 def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(
-        description="Webcam capture daemon for face recognition"
-    )
+    parser = argparse.ArgumentParser(description="Webcam capture daemon for face recognition")
     parser.add_argument(
         "--camera",
         type=int,

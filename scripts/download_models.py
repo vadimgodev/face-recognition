@@ -18,10 +18,7 @@ def main():
 
     # Download model (triggers automatic download from GitHub)
     try:
-        app = FaceAnalysis(
-            name=model_name,
-            providers=["CPUExecutionProvider"]
-        )
+        FaceAnalysis(name=model_name, providers=["CPUExecutionProvider"])
         print("Model download complete")
     except Exception as e:
         # Expected to fail on first load, but download happens

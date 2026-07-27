@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import logging
+from functools import partial
 
 import boto3
 from botocore.exceptions import ClientError
@@ -14,10 +16,12 @@ from src.providers.base import (
     FaceProvider,
 )
 from src.providers.collection_manager import get_collection_manager
+from src.providers.registry import register_cloud
 
 logger = logging.getLogger(__name__)
 
 
+@register_cloud("aws_rekognition")
 class AWSRekognitionProvider(FaceProvider):
     """
     AWS Rekognition implementation of FaceProvider with multi-collection sharding.
@@ -60,17 +64,22 @@ class AWSRekognitionProvider(FaceProvider):
             return self.collection_manager.get_collection_for_user(user_id)
         return self.collection_id
 
+    async def _call(self, fn, **kwargs):
+        """Run a blocking boto3 call off the event loop."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, partial(fn, **kwargs))
+
     async def initialize_collection(self, collection_id: str) -> bool:
         """Create collection if it doesn't exist."""
         try:
             # Check if collection exists
-            self.client.describe_collection(CollectionId=collection_id)
+            await self._call(self.client.describe_collection, CollectionId=collection_id)
             return True
         except ClientError as e:
             if e.response["Error"]["Code"] == "ResourceNotFoundException":
                 # Collection doesn't exist, create it
                 try:
-                    self.client.create_collection(CollectionId=collection_id)
+                    await self._call(self.client.create_collection, CollectionId=collection_id)
                     return True
                 except ClientError as create_error:
                     raise Exception(
@@ -92,7 +101,7 @@ class AWSRekognitionProvider(FaceProvider):
             return {"initialized": [self.collection_id]}
 
         # Initialize all sharded collections
-        results = {"initialized": [], "failed": []}
+        results: dict[str, list[object]] = {"initialized": [], "failed": []}
         for collection_id in self.collection_manager.get_all_collection_ids():
             try:
                 await self.initialize_collection(collection_id)
@@ -129,7 +138,8 @@ class AWSRekognitionProvider(FaceProvider):
             face_metadata.update(metadata.additional_data)
 
         try:
-            response = self.client.index_faces(
+            response = await self._call(
+                self.client.index_faces,
                 CollectionId=collection_id,  # Use sharded collection
                 Image={"Bytes": image_bytes},
                 ExternalImageId=external_image_id,
@@ -213,7 +223,8 @@ class AWSRekognitionProvider(FaceProvider):
         # Search each collection
         for collection_id in collections_to_search:
             try:
-                response = self.client.search_faces_by_image(
+                response = await self._call(
+                    self.client.search_faces_by_image,
                     CollectionId=collection_id,
                     Image={"Bytes": image_bytes},
                     MaxFaces=max_results,
@@ -272,11 +283,13 @@ class AWSRekognitionProvider(FaceProvider):
         # Return top max_results matches
         return all_matches[:max_results]
 
-    async def delete_face(self, face_id: str, collection_id: str = None) -> bool:
+    async def delete_face(self, face_id: str, collection_id: str | None = None) -> bool:
         """Delete a face from the collection."""
         try:
-            response = self.client.delete_faces(
-                CollectionId=collection_id or self.collection_id, FaceIds=[face_id]
+            response = await self._call(
+                self.client.delete_faces,
+                CollectionId=collection_id or self.collection_id,
+                FaceIds=[face_id],
             )
             deleted_faces = response.get("DeletedFaces", [])
             return face_id in deleted_faces
@@ -292,7 +305,9 @@ class AWSRekognitionProvider(FaceProvider):
             # AWS Rekognition doesn't have a direct "get face" API
             # We can use list_faces with a token, but it's not efficient
             # This is a limitation of AWS Rekognition
-            response = self.client.list_faces(CollectionId=self.collection_id, MaxResults=1000)
+            response = await self._call(
+                self.client.list_faces, CollectionId=self.collection_id, MaxResults=1000
+            )
 
             for face in response.get("Faces", []):
                 if face["FaceId"] == face_id:

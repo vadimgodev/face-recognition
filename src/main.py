@@ -45,7 +45,7 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Redis initialization failed (will continue without cache): {e}")
 
     # Startup: Initialize all face recognition collections (sharded)
-    logger.info("Initializing Face Recognition API...")
+    logger.info("Initializing FaceGuard API...")
     try:
         provider = get_face_provider()
 
@@ -87,12 +87,13 @@ async def lifespan(app: FastAPI):
             )
             # Trigger lazy loading by accessing the predictor
             await asyncio.get_running_loop().run_in_executor(
-                None, lambda: liveness_provider._get_predictor()
+                None,
+                lambda: liveness_provider._get_predictor(),  # type: ignore[attr-defined]  # concrete provider warm-up hook
             )
             logger.info("✅ Liveness detection models loaded")
 
         # Warm up face recognition provider (InsightFace or AWS)
-        if settings.face_provider == "insightface" or settings.use_hybrid_recognition:
+        if settings.recognition_mode in ("local", "hybrid"):
             logger.info("Preloading InsightFace models...")
             from src.providers.factory import get_insightface_provider
 
@@ -124,7 +125,7 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI application
 app = FastAPI(
-    title="Face Recognition API",
+    title="FaceGuard API",
     description="A flexible face recognition system with enrollment and identification capabilities",
     version=settings.APP_VERSION,
     docs_url="/docs",
@@ -200,7 +201,7 @@ async def health_check():
 async def root():
     """Root endpoint with API information."""
     return {
-        "name": "Face Recognition API",
+        "name": "FaceGuard API",
         "version": settings.APP_VERSION,
         "description": "A flexible face recognition system",
         "docs": "/docs",

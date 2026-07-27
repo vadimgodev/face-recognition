@@ -2,10 +2,9 @@
 Recognition strategy implementations.
 
 Each strategy encapsulates a different approach to face recognition:
-- InsightFaceOnly: Vector search with pgvector + template averaging
-- SmartHybrid: Three-tier confidence with adaptive AWS verification
-- InsightFaceAWS: Vector search + always verify with AWS
-- AWSOnly: AWS Rekognition search only
+- Local: Vector search with pgvector + template averaging
+- Hybrid: Three-tier confidence with adaptive AWS verification
+- Cloud: AWS Rekognition search only
 """
 
 from __future__ import annotations
@@ -64,7 +63,7 @@ class RecognitionStrategy(ABC):
         pass
 
 
-class InsightFaceOnlyStrategy(RecognitionStrategy):
+class LocalStrategy(RecognitionStrategy):
     """
     Vector search with pgvector + template averaging.
 
@@ -131,7 +130,7 @@ class InsightFaceOnlyStrategy(RecognitionStrategy):
         )
 
 
-class SmartHybridStrategy(RecognitionStrategy):
+class HybridStrategy(RecognitionStrategy):
     """
     Three-tier confidence: high=accept, medium=verify with AWS, low=reject.
 
@@ -304,127 +303,26 @@ class SmartHybridStrategy(RecognitionStrategy):
 
     async def _verify_with_aws(self, query_image: bytes, face: Face) -> float | None:
         """
-        Use AWS CompareFaces to verify a medium-confidence match.
+        Verify a medium-confidence match via the cloud provider's CompareFaces.
 
-        Returns the AWS similarity score (0-1) if confirmed, or None.
+        Returns the similarity score (0-1) if confirmed, or None.
         """
         if not self.aws_provider:
             return None
 
         try:
             stored_image = await self.storage.read(face.image_path)
-
-            # Use boto3 client from the aws_provider's session/config
-            import boto3
-            from botocore.exceptions import ClientError
-
-            rekognition = boto3.client(
-                "rekognition",
-                region_name=settings.aws_region,
-                aws_access_key_id=settings.aws_access_key_id,
-                aws_secret_access_key=settings.aws_secret_access_key,
-            )
-
-            response = rekognition.compare_faces(
-                SourceImage={"Bytes": query_image},
-                TargetImage={"Bytes": stored_image},
-                SimilarityThreshold=0,
-            )
-
-            if response["FaceMatches"]:
-                aws_similarity = response["FaceMatches"][0]["Similarity"] / 100.0
-                if aws_similarity >= 0.6:
-                    return aws_similarity
-
-            return None
-
-        except ClientError:
-            # AWS failure -- reject medium-confidence to be safe
-            return None
+            score: float | None = await self.aws_provider.compare_faces(query_image, stored_image)
         except Exception:
+            # Cloud failure -- reject medium-confidence to be safe
             return None
 
-
-class InsightFaceAWSStrategy(RecognitionStrategy):
-    """
-    Vector search + always verify with AWS.
-
-    Performance: ~500ms-1s
-    Cost: Only verify top candidates (~90% cheaper than full AWS search)
-    """
-
-    def __init__(
-        self,
-        insightface_provider,
-        aws_provider,
-        repository: FaceRepository,
-        template_service: TemplateService,
-    ):
-        self.insightface = insightface_provider
-        self.aws_provider = aws_provider
-        self.repository = repository
-        self.template = template_service
-
-    async def recognize(
-        self,
-        image_data: bytes,
-        max_results: int,
-        confidence_threshold: float,
-    ) -> list[tuple[Face, float, bool]]:
-        """Hybrid: InsightFace vector search + AWS verification."""
-        query_embedding = await self.insightface.extract_embedding(image_data)
-
-        vector_candidates = await self.repository.search_by_embedding(
-            embedding=query_embedding,
-            threshold=max(0.5, confidence_threshold - 0.2),
-            limit=settings.vector_search_candidates,
-        )
-
-        if not vector_candidates:
-            return []
-
-        verified_results = []
-        aws_verify_count = min(len(vector_candidates), settings.aws_verification_count)
-
-        for face, vector_similarity in vector_candidates[:aws_verify_count]:
-            aws_similarity = 0.0
-            if face.provider_face_id and face.provider_collection_id:
-                try:
-                    aws_similarity = vector_similarity
-                except Exception:
-                    aws_similarity = vector_similarity
-
-            combined_score = (vector_similarity * 0.7) + (aws_similarity * 0.3)
-            verified_results.append((face, combined_score, True))
-
-        verified_results.sort(key=lambda x: x[1], reverse=True)
-        final_results = [
-            (face, score, aws_used)
-            for face, score, aws_used in verified_results
-            if score >= confidence_threshold
-        ]
-
-        return final_results[:max_results]
-
-    async def recognize_from_embedding(
-        self,
-        embedding: list[float],
-        max_results: int,
-        confidence_threshold: float,
-    ) -> list[tuple[Face, float]]:
-        """
-        Hybrid from embedding: vector search only (AWS verification
-        requires raw image, not available for multi-face).
-        """
-        results = await self.repository.search_by_embedding(
-            embedding=embedding,
-            threshold=confidence_threshold,
-            limit=max_results,
-        )
-        return results
+        if score is not None and score >= 0.6:
+            return score
+        return None
 
 
-class AWSOnlyStrategy(RecognitionStrategy):
+class CloudStrategy(RecognitionStrategy):
     """
     AWS Rekognition search only.
 
@@ -462,45 +360,44 @@ class AWSOnlyStrategy(RecognitionStrategy):
         confidence_threshold: float,
     ) -> list[tuple]:
         """AWS-only does not support embedding-based recognition."""
-        raise ValueError(
-            "aws_only mode not supported for multi-face recognition. "
-            "Use insightface_only, insightface_aws, or smart_hybrid."
-        )
+        raise ValueError("cloud mode does not support multi-face recognition. Use local or hybrid.")
+
+
+_MODE_STRATEGIES = {
+    "local": "local",
+    "cloud": "cloud",
+    "hybrid": "hybrid",
+    "insightface_only": "local",
+    "smart_hybrid": "hybrid",
+    "insightface_aws": "hybrid",
+    "aws_only": "cloud",
+}
 
 
 def create_strategy(
     mode: str,
     insightface_provider=None,
     aws_provider=None,
-    repository: FaceRepository = None,
-    template_service: TemplateService = None,
+    repository: FaceRepository | None = None,
+    template_service: TemplateService | None = None,
     storage=None,
 ) -> RecognitionStrategy:
     """
-    Factory to create the appropriate strategy based on config.
+    Factory to create the appropriate strategy for a recognition mode.
 
-    Args:
-        mode: Recognition mode (insightface_only, smart_hybrid, etc.)
-        insightface_provider: InsightFace provider instance
-        aws_provider: AWS Rekognition provider instance
-        repository: FaceRepository instance
-        template_service: TemplateService instance
-        storage: Storage backend instance
-
-    Returns:
-        Configured RecognitionStrategy
+    Accepts the canonical modes (local, cloud, hybrid) and their deprecated
+    legacy aliases.
     """
-    if mode == "insightface_only":
-        return InsightFaceOnlyStrategy(insightface_provider, repository, template_service)
-    elif mode == "smart_hybrid":
-        return SmartHybridStrategy(
+    resolved = _MODE_STRATEGIES.get(mode)
+    if resolved == "local":
+        assert repository is not None and template_service is not None
+        return LocalStrategy(insightface_provider, repository, template_service)
+    if resolved == "hybrid":
+        assert repository is not None and template_service is not None
+        return HybridStrategy(
             insightface_provider, aws_provider, repository, template_service, storage
         )
-    elif mode == "insightface_aws":
-        return InsightFaceAWSStrategy(
-            insightface_provider, aws_provider, repository, template_service
-        )
-    elif mode == "aws_only":
-        return AWSOnlyStrategy(aws_provider, repository)
-    else:
-        raise ValueError(f"Unknown recognition mode: {mode}")
+    if resolved == "cloud":
+        assert repository is not None
+        return CloudStrategy(aws_provider, repository)
+    raise ValueError(f"Unknown recognition mode: {mode!r}")

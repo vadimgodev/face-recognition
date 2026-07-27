@@ -27,7 +27,7 @@ class CollectionManager:
     - Even distribution across collections
     """
 
-    def __init__(self, num_collections: int = 10, base_collection_id: str = None):
+    def __init__(self, num_collections: int = 10, base_collection_id: str | None = None):
         """
         Initialize collection manager.
 

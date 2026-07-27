@@ -2,7 +2,7 @@
   <div id="app">
     <header class="app-header">
       <div class="container">
-        <h1>Face Recognition System</h1>
+        <h1>FaceGuard</h1>
         <p>Powered by InsightFace + Smart Hybrid Recognition</p>
       </div>
     </header>
@@ -36,7 +36,7 @@
 
     <footer class="app-footer">
       <div class="container">
-        <p>&copy; 2025 Face Recognition System</p>
+        <p>&copy; 2026 FaceGuard</p>
       </div>
     </footer>
   </div>

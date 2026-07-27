@@ -21,27 +21,33 @@ class APITokenMiddleware(BaseHTTPMiddleware):
     EXCLUDED_PATHS = ["/health", "/docs", "/redoc", "/openapi.json", "/"]
 
     async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+
         # Skip authentication for excluded paths
-        if request.url.path in self.EXCLUDED_PATHS:
+        if path in self.EXCLUDED_PATHS:
             return await call_next(request)
 
-        # Skip authentication for image endpoints
-        # Images are loaded via <img> tags which can't send custom headers
-        # They're still protected by Basic Auth at Traefik level
-        if "/image" in request.url.path:
+        # Skip authentication for the face-image endpoint only
+        # (GET /api/v1/faces/{id}/image). Images are loaded via <img> tags
+        # which can't send custom headers; Basic Auth at Traefik still applies.
+        if path.startswith("/api/v1/faces/") and path.endswith("/image"):
             return await call_next(request)
 
-        # Skip authentication for webcam stream endpoint
-        # EventSource (SSE) doesn't support custom headers
-        # Still protected by Basic Auth at Traefik level
-        if "/webcam/stream" in request.url.path:
+        # Skip authentication for the webcam SSE stream only.
+        # EventSource doesn't support custom headers; Basic Auth still applies.
+        if path == "/api/v1/webcam/stream":
             return await call_next(request)
 
         # Get token from header
         token = request.headers.get("x-face-token")
 
-        # Validate token (constant-time comparison to prevent timing attacks)
-        if not token or not hmac.compare_digest(token, settings.secret_key):
+        # Validate token (constant-time comparison to prevent timing attacks).
+        # Compare as bytes: compare_digest raises TypeError on non-ASCII str input.
+        valid = bool(
+            token
+            and hmac.compare_digest(token.encode("utf-8"), settings.secret_key.encode("utf-8"))
+        )
+        if not valid:
             logger.warning(
                 f"Invalid auth attempt from {request.client.host if request.client else 'unknown'}"
             )

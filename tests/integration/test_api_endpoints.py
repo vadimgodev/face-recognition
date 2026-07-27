@@ -1,4 +1,4 @@
-"""Integration tests for Face Recognition API endpoints.
+"""Integration tests for FaceGuard API endpoints.
 
 Tests all major API endpoints using httpx.AsyncClient with mocked services.
 No Docker, database, or model loading required.
@@ -157,7 +157,7 @@ class TestHealthAndRoot:
             resp = await c.get("/")
         assert resp.status_code == 200
         body = resp.json()
-        assert body["name"] == "Face Recognition API"
+        assert body["name"] == "FaceGuard API"
         assert "version" in body
         assert body["docs"] == "/docs"
         assert body["health"] == "/health"
@@ -331,8 +331,30 @@ class TestRecognizeEndpoint:
         assert match["similarity"] == 0.95
         assert match["processor"] == "antelopev2"
         assert isinstance(body["execution_time"], float)
-        assert isinstance(body["detection_time"], float)
-        assert isinstance(body["recognition_time"], float)
+        assert body["detection_time"] is None
+        assert body["recognition_time"] is None
+
+    async def test_single_recognize_timings_are_null(
+        self, mock_face_service, test_image_bytes, _override_service
+    ):
+        """Single-face recognition never measures detection/recognition separately."""
+        face = _make_face()
+        mock_face_service.recognize_face.return_value = (
+            [(face, 0.9, False, "antelopev2")],
+            "antelopev2",
+        )
+
+        async with AsyncClient(transport=_transport(), base_url="http://test") as c:
+            resp = await c.post(
+                "/api/v1/faces/recognize",
+                headers={"x-face-token": TEST_TOKEN},
+                files={"image": ("t.jpg", test_image_bytes, "image/jpeg")},
+            )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["detection_time"] is None
+        assert body["recognition_time"] is None
 
     async def test_recognize_no_matches(
         self, mock_face_service, test_image_bytes, _override_service

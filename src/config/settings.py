@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -21,11 +21,16 @@ class Settings(BaseSettings):
     )
 
     # Application
-    app_name: str = Field(default="face-recognition-api", alias="APP_NAME")
+    app_name: str = Field(default="faceguard", alias="APP_NAME")
     app_env: str = Field(default="development", alias="APP_ENV")
     debug: bool = Field(default=False, alias="DEBUG")
     api_host: str = Field(default="0.0.0.0", alias="API_HOST")
     api_port: int = Field(default=8000, alias="API_PORT")
+    max_upload_size_mb: int = Field(
+        default=10,
+        alias="MAX_UPLOAD_SIZE_MB",
+        description="Maximum accepted image upload size in megabytes",
+    )
 
     # Database
     postgres_password: str = Field(default="postgres", alias="POSTGRES_PASSWORD")
@@ -58,9 +63,24 @@ class Settings(BaseSettings):
     aws_rekognition_collection_id: str = Field(
         default="faces-collection", alias="AWS_REKOGNITION_COLLECTION_ID"
     )
+    num_rekognition_collections: int = Field(
+        default=10,
+        alias="NUM_REKOGNITION_COLLECTIONS",
+        description="Number of sharded Rekognition collections (consistent-hash sharding)",
+    )
 
-    # Face Recognition Provider
-    face_provider: str = Field(default="aws_rekognition", alias="FACE_PROVIDER")
+    # Recognition mode
+    recognition_mode: str = Field(
+        default="local",
+        alias="RECOGNITION_MODE",
+        description="Recognition engine: local, cloud, or hybrid",
+    )
+    local_provider: str = Field(default="insightface", alias="LOCAL_PROVIDER")
+    cloud_provider: str = Field(default="aws_rekognition", alias="CLOUD_PROVIDER")
+    # Deprecated legacy knobs, mapped to recognition_mode at load time
+    use_hybrid_recognition: bool | None = Field(default=None, alias="USE_HYBRID_RECOGNITION")
+    face_provider: str | None = Field(default=None, alias="FACE_PROVIDER")
+    hybrid_mode: str | None = Field(default=None, alias="HYBRID_MODE")
 
     # Liveness Detection Settings
     liveness_enabled: bool = Field(
@@ -104,17 +124,7 @@ class Settings(BaseSettings):
         description="Require liveness check during face recognition",
     )
 
-    # Hybrid Recognition Settings
-    use_hybrid_recognition: bool = Field(
-        default=False,
-        alias="USE_HYBRID_RECOGNITION",
-        description="Enable hybrid InsightFace + AWS Rekognition approach",
-    )
-    hybrid_mode: str = Field(
-        default="insightface_only",
-        alias="HYBRID_MODE",
-        description="Hybrid search strategy: insightface_only, insightface_aws, or aws_only",
-    )
+    # InsightFace Settings
     insightface_model: str = Field(
         default="buffalo_l",
         alias="INSIGHTFACE_MODEL",
@@ -292,22 +302,23 @@ class Settings(BaseSettings):
         description="Minimum overlap ratio for face to be in ROI (0.3 = 30%)",
     )
 
-    # Door Unlock Settings
-    door_unlock_provider: str = Field(
-        default="mock",
-        alias="DOOR_UNLOCK_PROVIDER",
-        description="Door unlock provider: mock, http, or gpio",
+    # On-match trigger
+    trigger_provider: str = Field(
+        default="log",
+        validation_alias=AliasChoices("TRIGGER_PROVIDER", "DOOR_UNLOCK_PROVIDER"),
+        description="Trigger fired on a confident match: log, webhook, or gpio",
     )
-    door_unlock_url: str = Field(
-        default="http://door-controller/unlock",
-        alias="DOOR_UNLOCK_URL",
-        description="HTTP endpoint for door unlock (when provider=http)",
+    trigger_webhook_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("TRIGGER_WEBHOOK_URL", "DOOR_UNLOCK_URL"),
     )
-    door_unlock_confidence_threshold: float = Field(
+    trigger_confidence_threshold: float = Field(
         default=0.85,
-        alias="DOOR_UNLOCK_CONFIDENCE_THRESHOLD",
-        description="Minimum confidence to trigger door unlock (0.0-1.0)",
+        validation_alias=AliasChoices(
+            "TRIGGER_CONFIDENCE_THRESHOLD", "DOOR_UNLOCK_CONFIDENCE_THRESHOLD"
+        ),
     )
+    trigger_gpio_pin: int = Field(default=17, alias="TRIGGER_GPIO_PIN")
 
     # Access Logging Settings
     access_log_output: str = Field(
@@ -316,7 +327,7 @@ class Settings(BaseSettings):
         description="Access log output: stdout, file, or both",
     )
     access_log_file_path: str = Field(
-        default="/var/log/face-recognition/access.log",
+        default="/var/log/faceguard/access.log",
         alias="ACCESS_LOG_FILE_PATH",
         description="File path for access logs (when output=file or both)",
     )
@@ -349,12 +360,58 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_settings(self):
         """Validate settings combinations."""
+        if not self.secret_key and self.app_env == "production":
+            raise ValueError(
+                "SECRET_KEY must be set when APP_ENV is 'production' "
+                "(it is the x-face-token value clients authenticate with)"
+            )
         if not self.secret_key and not self.debug:
             logger.warning(
                 "SECRET_KEY is empty and debug mode is disabled. Authentication will reject all requests."
             )
         if self.storage_backend == "s3" and not self.storage_s3_bucket:
             raise ValueError("STORAGE_S3_BUCKET must be set when STORAGE_BACKEND is 's3'")
+        return self
+
+    _LEGACY_MODES = {
+        "insightface_only": "local",
+        "smart_hybrid": "hybrid",
+        "insightface_aws": "hybrid",
+        "aws_only": "cloud",
+    }
+
+    @model_validator(mode="after")
+    def _resolve_recognition_mode(self):
+        if self.recognition_mode in self._LEGACY_MODES:
+            self.recognition_mode = self._LEGACY_MODES[self.recognition_mode]
+        legacy_used = (
+            self.hybrid_mode is not None
+            or self.use_hybrid_recognition is not None
+            or self.face_provider is not None
+        )
+        if legacy_used and "recognition_mode" not in self.model_fields_set:
+            if self.use_hybrid_recognition and self.hybrid_mode:
+                self.recognition_mode = self._LEGACY_MODES.get(self.hybrid_mode, self.hybrid_mode)
+            elif self.face_provider == "aws_rekognition":
+                self.recognition_mode = "cloud"
+            elif self.face_provider == "insightface":
+                self.recognition_mode = "local"
+            logger.warning(
+                "FACE_PROVIDER/USE_HYBRID_RECOGNITION/HYBRID_MODE are deprecated; "
+                "use RECOGNITION_MODE=%s",
+                self.recognition_mode,
+            )
+        if self.recognition_mode not in {"local", "cloud", "hybrid"}:
+            raise ValueError(f"Invalid RECOGNITION_MODE: {self.recognition_mode!r}")
+        return self
+
+    _LEGACY_TRIGGER_PROVIDERS = {"mock": "log", "http": "webhook"}
+
+    @model_validator(mode="after")
+    def _resolve_trigger_provider(self):
+        self.trigger_provider = self._LEGACY_TRIGGER_PROVIDERS.get(
+            self.trigger_provider, self.trigger_provider
+        )
         return self
 
     # Logging

@@ -21,14 +21,13 @@ Usage:
     python scripts/batch_enroll.py --source /path/to/images --processed /path/to/done
 """
 
+import argparse
 import os
 import re
+import shutil
 import sys
 import time
-import shutil
-import argparse
 from pathlib import Path
-from typing import Dict, Optional
 
 import requests
 from dotenv import load_dotenv
@@ -57,7 +56,7 @@ class Colors:
     BOLD = "\033[1m"
 
 
-def parse_filename(filename: str) -> Optional[Dict[str, str]]:
+def parse_filename(filename: str) -> dict[str, str] | None:
     """
     Parse filename format: {room_id}_{user_name}_{location}_{timestamp}.jpg
 
@@ -111,7 +110,7 @@ def check_api_health() -> bool:
         return False
 
 
-def enroll_face(filepath: str, info: Dict[str, str]) -> tuple:
+def enroll_face(filepath: str, info: dict[str, str]) -> tuple:
     """Enroll a face using the API. Returns (success, message)."""
     try:
         filename = os.path.basename(filepath)
@@ -169,7 +168,9 @@ def main():
         "--source", default=DEFAULT_SOURCE_DIR, help="Directory containing images to enroll"
     )
     parser.add_argument(
-        "--processed", default=DEFAULT_PROCESSED_DIR, help="Directory for successfully enrolled images"
+        "--processed",
+        default=DEFAULT_PROCESSED_DIR,
+        help="Directory for successfully enrolled images",
     )
     parser.add_argument(
         "--failed", default=DEFAULT_FAILED_DIR, help="Directory for failed enrollment images"
@@ -181,7 +182,9 @@ def main():
     print(f"{Colors.HEADER}{Colors.BOLD}{'=' * 60}{Colors.ENDC}\n")
 
     if not check_api_health():
-        print(f"\n{Colors.FAIL}API is not available. Start it with: docker-compose up -d{Colors.ENDC}\n")
+        print(
+            f"\n{Colors.FAIL}API is not available. Start it with: docker-compose up -d{Colors.ENDC}\n"
+        )
         sys.exit(1)
 
     if not os.path.isdir(args.source):

@@ -8,6 +8,7 @@ Separates detection from recognition for multi-face scenarios.
 import logging
 from enum import Enum
 from pathlib import Path
+from typing import Any
 
 import cv2
 import numpy as np
@@ -57,15 +58,18 @@ class FastFaceDetector:
         self.min_neighbors = min_neighbors
 
         # Lazy-loaded detectors
-        self._haar_cascade = None
-        self._dnn_net = None
-        self._insightface_app = None
+        self._haar_cascade: cv2.CascadeClassifier | None = None
+        self._dnn_net: cv2.dnn.Net | None = None
+        self._insightface_app: Any = None
 
     def _get_haar_cascade(self):
         """Lazy-load Haar Cascade classifier."""
         if self._haar_cascade is None:
             # Use OpenCV's pre-trained frontal face cascade
-            cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+            cascade_path = (
+                cv2.data.haarcascades  # type: ignore[attr-defined]  # data submodule absent from cv2 stubs
+                + "haarcascade_frontalface_default.xml"
+            )
             self._haar_cascade = cv2.CascadeClassifier(cascade_path)
 
             if self._haar_cascade.empty():
@@ -96,9 +100,9 @@ class FastFaceDetector:
                 ),
             ]
 
-            for prototxt_path, model_path in possible_paths:
-                prototxt_path = Path(prototxt_path).expanduser()
-                model_path = Path(model_path).expanduser()
+            for prototxt_name, model_name in possible_paths:
+                prototxt_path = Path(prototxt_name).expanduser()
+                model_path = Path(model_name).expanduser()
 
                 if prototxt_path.exists() and model_path.exists():
                     self._dnn_net = cv2.dnn.readNetFromCaffe(str(prototxt_path), str(model_path))
@@ -218,7 +222,7 @@ class FastFaceDetector:
         detections = net.forward()
 
         # Parse detections
-        bboxes = []
+        bboxes: list[BoundingBox] = []
         for i in range(detections.shape[2]):
             confidence = detections[0, 0, i, 2]
 

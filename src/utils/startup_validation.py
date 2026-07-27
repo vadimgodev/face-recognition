@@ -9,6 +9,9 @@ import logging
 from pathlib import Path
 
 from src.config.settings import settings
+from src.exceptions import ConfigurationError
+from src.providers import registry
+from src.triggers.providers import create_trigger
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +151,15 @@ def validate_liveness_configuration() -> tuple[bool, list[str]]:
     return is_valid, errors
 
 
+def validate_embedding_dim(provider) -> None:
+    dim = getattr(provider, "embedding_dim", None)
+    if dim != 512:
+        raise RuntimeError(
+            f"Local provider {getattr(provider, 'name', provider)!r} has embedding_dim={dim}; "
+            "the faces.embedding_local column is Vector(512). A different dimension needs its own migration."
+        )
+
+
 def validate_startup_requirements(fail_on_error: bool = True) -> bool:
     """
     Validate all startup requirements.
@@ -174,11 +186,20 @@ def validate_startup_requirements(fail_on_error: bool = True) -> bool:
         all_valid = False
         all_errors.extend(liveness_errors)
 
-    # Add more validation checks here as needed
-    # - Database connectivity
-    # - AWS credentials (if using AWS provider)
-    # - Storage backend availability
-    # etc.
+    if settings.recognition_mode in {"local", "hybrid"}:
+        try:
+            provider_class = registry.resolve_local(settings.local_provider)
+            validate_embedding_dim(provider_class)
+        except (RuntimeError, ConfigurationError) as e:
+            all_valid = False
+            all_errors.append(str(e))
+
+    if settings.webcam_enabled:
+        try:
+            create_trigger()
+        except ValueError as e:
+            all_valid = False
+            all_errors.append(str(e))
 
     logger.info("=" * 70)
 
@@ -194,7 +215,8 @@ def validate_startup_requirements(fail_on_error: bool = True) -> bool:
 
         if fail_on_error:
             raise RuntimeError(
-                f"Startup validation failed with {len(all_errors)} error(s). "
+                f"Startup validation failed with {len(all_errors)} error(s): "
+                f"{'; '.join(all_errors)}. "
                 f"Fix the issues above or disable liveness detection (LIVENESS_ENABLED=false)."
             )
 

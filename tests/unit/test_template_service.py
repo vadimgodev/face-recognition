@@ -22,7 +22,7 @@ def _make_face(
     face = MagicMock()
     face.id = face_id
     face.user_name = user_name
-    face.embedding_insightface = embedding
+    face.embedding_local = embedding
     face.photo_type = photo_type
     face.image_path = f"faces/{user_name}/{face_id}.jpg"
     return face

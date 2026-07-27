@@ -86,6 +86,71 @@ class TestAutoCaptureService:
 
     @pytest.mark.asyncio
     @patch("src.services.auto_capture_service.settings")
+    async def test_same_second_captures_get_unique_provider_face_ids(
+        self,
+        mock_settings,
+        mock_repo,
+        mock_storage,
+        mock_insightface,
+        matched_face,
+        image_data,
+    ):
+        """Regression: second-resolution IDs collided on the unique index."""
+        mock_settings.auto_capture_enabled = True
+        mock_settings.auto_capture_confidence_threshold = 0.8
+        mock_settings.auto_capture_max_verified_photos = 4
+        mock_settings.insightface_model = "buffalo_l"
+        mock_settings.storage_backend = "local"
+
+        service = self._make_service(mock_repo, mock_storage, mock_insightface)
+        for _ in range(2):
+            assert (
+                await service.capture_if_eligible(
+                    image_data=image_data,
+                    matched_face=matched_face,
+                    confidence=0.95,
+                    processor="insightface",
+                )
+                is True
+            )
+
+        ids = [call.args[0].provider_face_id for call in mock_repo.create.await_args_list]
+        assert len(ids) == 2
+        assert ids[0] != ids[1]
+
+    @pytest.mark.asyncio
+    @patch("src.services.auto_capture_service.settings")
+    async def test_failed_insert_rolls_back_session(
+        self,
+        mock_settings,
+        mock_repo,
+        mock_storage,
+        mock_insightface,
+        matched_face,
+        image_data,
+    ):
+        """Regression: a failed insert left the async session in aborted state."""
+        mock_settings.auto_capture_enabled = True
+        mock_settings.auto_capture_confidence_threshold = 0.8
+        mock_settings.auto_capture_max_verified_photos = 4
+        mock_settings.insightface_model = "buffalo_l"
+        mock_settings.storage_backend = "local"
+
+        mock_repo.create.side_effect = RuntimeError("unique constraint violated")
+
+        service = self._make_service(mock_repo, mock_storage, mock_insightface)
+        result = await service.capture_if_eligible(
+            image_data=image_data,
+            matched_face=matched_face,
+            confidence=0.95,
+            processor="insightface",
+        )
+
+        assert result is False
+        mock_repo.session.rollback.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    @patch("src.services.auto_capture_service.settings")
     async def test_skips_when_disabled(
         self,
         mock_settings,
@@ -222,7 +287,7 @@ class TestAutoCaptureService:
         assert result is True
         # Verify the Face created has no embedding
         created_face = mock_repo.create.call_args[0][0]
-        assert created_face.embedding_insightface is None
+        assert created_face.embedding_local is None
 
     @pytest.mark.asyncio
     @patch("src.services.auto_capture_service.settings")
