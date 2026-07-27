@@ -46,7 +46,7 @@ python-dotenv==1.2.2
 python-json-logger==4.1.0
 
 # Development Tools
-black==25.11.0
+black==26.5.1
 ruff==0.15.22
 mypy==1.19.1
 
