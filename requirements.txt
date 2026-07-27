@@ -37,7 +37,7 @@ onnxruntime==1.27.0
 
 # Anti-Spoofing (Silent-Face)
 torch>=2.0.0
-torchvision>=0.15.0
+torchvision>=0.28.0
 
 # Environment & Config
 python-dotenv==1.2.2
