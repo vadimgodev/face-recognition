@@ -1,5 +1,5 @@
 # Web Framework
-fastapi==0.139.2
+fastapi==0.140.7
 uvicorn[standard]==0.51.0
 pydantic==2.13.4
 pydantic-settings==2.14.2
@@ -13,7 +13,7 @@ alembic==1.18.5
 pgvector==0.5.0
 
 # AWS Services
-boto3==1.43.54
+boto3==1.43.57
 
 # Storage Abstraction
 fs==2.4.16
@@ -28,16 +28,16 @@ redis==7.0.1
 hiredis==3.4.0
 
 # Image Processing
-Pillow==11.3.0
+Pillow==12.3.0
 opencv-python==4.13.0.92
 
 # Face Recognition (InsightFace)
-insightface==0.7.3
-onnxruntime==1.27.0
+insightface==1.0.1
+onnxruntime==1.28.0
 
 # Anti-Spoofing (Silent-Face)
 torch>=2.0.0
-torchvision>=0.15.0
+torchvision>=0.28.0
 
 # Environment & Config
 python-dotenv==1.2.2
