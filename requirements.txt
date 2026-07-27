@@ -32,7 +32,7 @@ Pillow==11.3.0
 opencv-python==4.13.0.92
 
 # Face Recognition (InsightFace)
-insightface==0.7.3
+insightface==1.0.1
 onnxruntime==1.27.0
 
 # Anti-Spoofing (Silent-Face)
