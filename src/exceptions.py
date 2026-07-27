@@ -1,4 +1,4 @@
-"""Custom exception hierarchy for the Face Recognition API."""
+"""Custom exception hierarchy for the FaceGuard API."""
 
 
 class FaceRecognitionError(Exception):

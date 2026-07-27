@@ -16,7 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - PostgreSQL with pgvector for embedding storage
 - Redis caching for recognition results
 - S3 and local filesystem storage backends
-- Docker Compose deployment with Nginx reverse proxy
+- Docker Compose deployment with Traefik reverse proxy
 - Two-layer authentication (Basic Auth + API Token)
 - HTTPS support via Let's Encrypt
 - Batch enrollment script

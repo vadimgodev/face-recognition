@@ -5,19 +5,19 @@ Revises: f8495daf9f9f
 Create Date: 2025-10-20 22:23:53.892488
 
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
+
+import sqlalchemy as sa
+from pgvector.sqlalchemy import Vector
+from sqlalchemy.dialects.postgresql import UUID
 
 from alembic import op
-import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID
-from pgvector.sqlalchemy import Vector
-
 
 # revision identifiers, used by Alembic.
 revision: str = 'd6546cce3b75'
-down_revision: Union[str, None] = 'f8495daf9f9f'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = 'f8495daf9f9f'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

@@ -1,27 +1,31 @@
 # Web Framework
-fastapi==0.128.8
-uvicorn[standard]==0.39.0
-pydantic==2.12.5
-pydantic-settings==2.11.0
-pydantic[email]==2.12.5
-python-multipart==0.0.20
+fastapi==0.139.2
+uvicorn[standard]==0.51.0
+pydantic==2.13.4
+pydantic-settings==2.14.2
+pydantic[email]==2.13.4
+python-multipart==0.0.32
 
 # Database
-sqlalchemy==2.0.48
+sqlalchemy==2.0.51
 asyncpg==0.31.0
-alembic==1.16.5
-pgvector==0.4.2
+alembic==1.18.5
+pgvector==0.5.0
 
 # AWS Services
-boto3==1.42.79
+boto3==1.43.54
 
 # Storage Abstraction
 fs==2.4.16
 fs-s3fs==1.1.1
+setuptools>=81,<82  # fs 2.4.16 needs pkg_resources; removed in setuptools 82
+
+# HTTP client (webhook trigger, webcam daemon)
+httpx==0.28.1
 
 # Caching
 redis==7.0.1
-hiredis==3.3.1
+hiredis==3.4.0
 
 # Image Processing
 Pillow==11.3.0
@@ -29,14 +33,14 @@ opencv-python==4.13.0.92
 
 # Face Recognition (InsightFace)
 insightface==0.7.3
-onnxruntime==1.24.4
+onnxruntime==1.27.0
 
 # Anti-Spoofing (Silent-Face)
 torch>=2.0.0
 torchvision>=0.15.0
 
 # Environment & Config
-python-dotenv==1.2.1
+python-dotenv==1.2.2
 
 # Logging
-python-json-logger==4.0.0
+python-json-logger==4.1.0

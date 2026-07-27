@@ -48,6 +48,7 @@ def _make_settings(**env_overrides):
         "AWS_REGION",
         "AWS_REKOGNITION_COLLECTION_ID",
         "FACE_PROVIDER",
+        "RECOGNITION_MODE",
         "LIVENESS_ENABLED",
         "LIVENESS_PROVIDER",
         "LIVENESS_THRESHOLD",
@@ -157,8 +158,9 @@ class TestSettingsDefaults:
         assert s.storage_backend == "local"
 
     def test_hybrid_mode_default(self):
+        """Deprecated field: None unless a legacy env var sets it."""
         s = _make_settings(SECRET_KEY="x", DEBUG="true")
-        assert s.hybrid_mode == "insightface_only"
+        assert s.hybrid_mode is None
 
 
 # ---------------------------------------------------------------------------
@@ -266,3 +268,68 @@ class TestAllowedOrigins:
         s = _make_settings(SECRET_KEY="x", DEBUG="true")
         assert isinstance(s.allowed_origins, list)
         assert len(s.allowed_origins) >= 1
+
+
+# ---------------------------------------------------------------------------
+# RECOGNITION_MODE with legacy alias mapping
+# ---------------------------------------------------------------------------
+
+
+class TestRecognitionMode:
+    def _make(self, **env):
+        from src.config.settings import Settings
+
+        # Isolate from ambient recognition env vars (conftest sets RECOGNITION_MODE)
+        # so legacy-alias resolution is exercised only via the passed kwargs.
+        clean = {
+            k: v
+            for k, v in os.environ.items()
+            if k
+            not in ("RECOGNITION_MODE", "USE_HYBRID_RECOGNITION", "FACE_PROVIDER", "HYBRID_MODE")
+        }
+        with patch.dict(os.environ, clean, clear=True):
+            return Settings(_env_file=None, **env)
+
+    def test_default_is_local(self):
+        assert self._make().recognition_mode == "local"
+
+    @pytest.mark.parametrize(
+        "value,expected",
+        [
+            ("local", "local"),
+            ("cloud", "cloud"),
+            ("hybrid", "hybrid"),
+            ("insightface_only", "local"),
+            ("smart_hybrid", "hybrid"),
+            ("insightface_aws", "hybrid"),
+            ("aws_only", "cloud"),
+        ],
+    )
+    def test_mode_values_and_legacy_aliases(self, value, expected):
+        assert self._make(RECOGNITION_MODE=value).recognition_mode == expected
+
+    @pytest.mark.parametrize(
+        "env,expected",
+        [
+            ({"USE_HYBRID_RECOGNITION": "true", "HYBRID_MODE": "smart_hybrid"}, "hybrid"),
+            ({"USE_HYBRID_RECOGNITION": "true", "HYBRID_MODE": "insightface_only"}, "local"),
+            ({"USE_HYBRID_RECOGNITION": "true", "HYBRID_MODE": "insightface_aws"}, "hybrid"),
+            ({"USE_HYBRID_RECOGNITION": "true", "HYBRID_MODE": "aws_only"}, "cloud"),
+            ({"USE_HYBRID_RECOGNITION": "false", "FACE_PROVIDER": "aws_rekognition"}, "cloud"),
+            ({"USE_HYBRID_RECOGNITION": "false", "FACE_PROVIDER": "insightface"}, "local"),
+        ],
+    )
+    def test_legacy_var_combinations(self, env, expected):
+        assert self._make(**env).recognition_mode == expected
+
+    def test_explicit_mode_wins_over_legacy(self):
+        s = self._make(
+            RECOGNITION_MODE="local",
+            USE_HYBRID_RECOGNITION="true",
+            HYBRID_MODE="aws_only",
+        )
+        assert s.recognition_mode == "local"
+
+    def test_invalid_mode_rejected(self):
+        with pytest.raises(ValueError, match="RECOGNITION_MODE"):
+            self._make(RECOGNITION_MODE="quantum")

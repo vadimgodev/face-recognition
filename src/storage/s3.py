@@ -12,8 +12,8 @@ class S3StorageBackend(StorageBackend):
         self,
         bucket_name: str,
         region: str,
-        aws_access_key_id: str = None,
-        aws_secret_access_key: str = None,
+        aws_access_key_id: str | None = None,
+        aws_secret_access_key: str | None = None,
     ):
         """
         Initialize S3 storage.
@@ -75,7 +75,8 @@ class S3StorageBackend(StorageBackend):
         if not self.fs.exists(file_path):
             raise FileNotFoundError(f"File not found: {file_path}")
 
-        return self.fs.readbytes(file_path)
+        data: bytes = self.fs.readbytes(file_path)
+        return data
 
     async def delete(self, file_path: str) -> bool:
         """Delete file from S3."""
@@ -91,7 +92,7 @@ class S3StorageBackend(StorageBackend):
     async def exists(self, file_path: str) -> bool:
         """Check if file exists in S3."""
         file_path = self._validate_path(file_path)
-        return self.fs.exists(file_path)
+        return bool(self.fs.exists(file_path))
 
     def get_url(self, file_path: str) -> str:
         """Get S3 URL."""

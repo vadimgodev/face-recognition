@@ -101,9 +101,7 @@ class TemplateService:
         for user_name in user_groups:
             all_user_faces = user_faces_map.get(user_name, [])
             embeddings = [
-                f.embedding_insightface
-                for f in all_user_faces
-                if f.embedding_insightface is not None
+                f.embedding_local for f in all_user_faces if f.embedding_local is not None
             ]
 
             if not embeddings:
@@ -141,7 +139,7 @@ class TemplateService:
         """
         Compute template similarity for a single user.
 
-        Used by smart_hybrid when processing users one at a time.
+        Used by the hybrid strategy when processing users one at a time.
 
         Args:
             query_embedding: The query face embedding
@@ -152,9 +150,7 @@ class TemplateService:
             (representative_face, template_similarity) or None
         """
         all_user_faces = await self.repository.get_photos_by_user_name(user_name)
-        embeddings = [
-            f.embedding_insightface for f in all_user_faces if f.embedding_insightface is not None
-        ]
+        embeddings = [f.embedding_local for f in all_user_faces if f.embedding_local is not None]
 
         if not embeddings:
             return None

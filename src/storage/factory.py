@@ -8,7 +8,7 @@ class StorageFactory:
     """Factory for creating storage backend instances."""
 
     @classmethod
-    def create_storage(cls, backend_type: str = None) -> StorageBackend:
+    def create_storage(cls, backend_type: str | None = None) -> StorageBackend:
         """
         Create a storage backend instance.
 

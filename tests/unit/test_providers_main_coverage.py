@@ -895,7 +895,7 @@ class TestMainHealthAndRoot:
 
         assert response.status_code == 200
         body = response.json()
-        assert body["name"] == "Face Recognition API"
+        assert body["name"] == "FaceGuard API"
         assert "version" in body
         assert body["docs"] == "/docs"
         assert body["health"] == "/health"
@@ -1000,7 +1000,7 @@ class TestMainAppConfiguration:
     def test_app_title_and_version(self):
         from src.main import app
 
-        assert app.title == "Face Recognition API"
+        assert app.title == "FaceGuard API"
         assert app.version is not None
 
     def test_cors_middleware_present(self):
@@ -1069,8 +1069,7 @@ class TestMainLifespan:
             patch("src.main.engine") as mock_engine,
         ):
             mock_settings.liveness_enabled = False
-            mock_settings.face_provider = "aws_rekognition"
-            mock_settings.use_hybrid_recognition = False
+            mock_settings.recognition_mode = "cloud"
             mock_engine.dispose = AsyncMock()
 
             async with lifespan(mock_app):
@@ -1095,8 +1094,7 @@ class TestMainLifespan:
             patch("src.main.engine") as mock_engine,
         ):
             mock_settings.liveness_enabled = False
-            mock_settings.face_provider = "aws_rekognition"
-            mock_settings.use_hybrid_recognition = False
+            mock_settings.recognition_mode = "cloud"
             mock_engine.dispose = AsyncMock()
 
             async with lifespan(mock_app):
@@ -1127,8 +1125,7 @@ class TestMainLifespan:
             patch("src.main.engine") as mock_engine,
         ):
             mock_settings.liveness_enabled = False
-            mock_settings.face_provider = "aws_rekognition"
-            mock_settings.use_hybrid_recognition = False
+            mock_settings.recognition_mode = "cloud"
             mock_engine.dispose = AsyncMock()
 
             async with lifespan(mock_app):
@@ -1170,8 +1167,7 @@ class TestMainLifespan:
             patch("src.main.engine") as mock_engine,
         ):
             mock_settings.liveness_enabled = False
-            mock_settings.face_provider = "aws_rekognition"
-            mock_settings.use_hybrid_recognition = False
+            mock_settings.recognition_mode = "cloud"
             mock_engine.dispose = AsyncMock()
 
             # Should not raise even though redis close fails
@@ -1209,8 +1205,7 @@ class TestMainLifespan:
             mock_settings.liveness_device_id = -1
             mock_settings.liveness_model_dir = "./models/anti_spoof"
             mock_settings.liveness_detector_path = "./models"
-            mock_settings.face_provider = "aws_rekognition"
-            mock_settings.use_hybrid_recognition = False
+            mock_settings.recognition_mode = "cloud"
             mock_engine.dispose = AsyncMock()
 
             with patch(
@@ -1248,8 +1243,7 @@ class TestMainLifespan:
             mock_settings.liveness_device_id = -1
             mock_settings.liveness_model_dir = "./models/anti_spoof"
             mock_settings.liveness_detector_path = "./models"
-            mock_settings.face_provider = "aws_rekognition"
-            mock_settings.use_hybrid_recognition = False
+            mock_settings.recognition_mode = "cloud"
             mock_engine.dispose = AsyncMock()
 
             with patch(

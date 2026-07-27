@@ -8,10 +8,12 @@ import threading
 
 from src.antispoof.predictor import AntiSpoofPredictor
 from src.providers.liveness_base import LivenessProvider, LivenessResult, SpoofingType
+from src.providers.registry import register_liveness
 
 logger = logging.getLogger(__name__)
 
 
+@register_liveness("silent_face")
 class SilentFaceLivenessProvider(LivenessProvider):
     """
     Passive liveness detection using Silent-Face-Anti-Spoofing.

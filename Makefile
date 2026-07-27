@@ -1,11 +1,20 @@
-.PHONY: help up down restart logs ps clean db-reset test enroll recognize list-faces delete-all health
+.PHONY: help build up down restart logs logs-app ps clean db-reset db-shell db-migrate test enroll recognize list-faces delete-all health stats check-quality dev-setup shell-app shell-db monitor errors
+
+# API location and credentials for curl-based targets.
+# Local uvicorn:      make health
+# Docker via Traefik: make health API_URL=http://localhost BASIC=admin:password TOKEN=<SECRET_KEY>
+API_URL ?= http://localhost:8000
+TOKEN ?=
+BASIC ?=
+CURL_AUTH = $(if $(TOKEN),-H "x-face-token: $(TOKEN)") $(if $(BASIC),-u $(BASIC))
 
 # Default target
 help:
-	@echo "Face Recognition API - Available Commands"
+	@echo "FaceGuard - Available Commands"
 	@echo ""
 	@echo "Docker Management:"
-	@echo "  make up              - Start all containers"
+	@echo "  make build           - Build the app image"
+	@echo "  make up              - Build and start all containers"
 	@echo "  make down            - Stop all containers"
 	@echo "  make restart         - Restart all containers"
 	@echo "  make logs            - View all logs (follow mode)"
@@ -32,72 +41,75 @@ help:
 	@echo "  make stats           - Show quality statistics"
 	@echo "  make check-quality FILE=path/to/photo.jpg             - Check photo quality"
 	@echo ""
-	@echo "Maintenance:"
-	@echo "  make fix-models      - Fix InsightFace model directory structure (run after restart)"
+	@echo "API targets accept API_URL, TOKEN (x-face-token) and BASIC (user:password):"
+	@echo "  make health API_URL=http://localhost BASIC=admin:pass TOKEN=secret"
 
 # Docker commands
+build:
+	docker compose build app
+
 up:
 	@echo "Starting all containers..."
-	docker-compose up -d
+	docker compose up --build -d --force-recreate
 	@echo "Waiting for services to be ready..."
 	@sleep 5
-	@echo "Services started! API: http://localhost:8000/docs"
+	@echo "Services started! Web UI: http://localhost (Basic Auth) - API docs: http://localhost/docs"
 
 down:
 	@echo "Stopping all containers..."
-	docker-compose down
+	docker compose down
 
 restart:
 	@echo "Restarting all containers..."
-	docker-compose down
-	docker-compose up -d
+	docker compose down
+	docker compose up -d
 	@echo "Waiting for services to be ready..."
 	@sleep 5
 	@echo "Services restarted!"
 
 logs:
-	docker-compose logs -f
+	docker compose logs -f
 
 logs-app:
-	docker-compose logs -f app
+	docker compose logs -f app
 
 ps:
-	docker-compose ps
+	docker compose ps
 
 clean:
 	@echo "WARNING: This will remove all containers, volumes, and data!"
 	@echo "Press Ctrl+C to cancel, or wait 5 seconds to continue..."
 	@sleep 5
-	docker-compose down -v
+	docker compose down -v
 	@echo "Cleanup complete!"
 
 # Database commands
 db-reset:
 	@echo "Resetting database..."
-	docker-compose exec postgres psql -U postgres -d facedb -c "TRUNCATE TABLE faces CASCADE;"
+	docker compose exec postgres psql -U postgres -d facedb -c "TRUNCATE TABLE faces CASCADE;"
 	@echo "Database reset complete!"
 
 db-shell:
-	docker-compose exec postgres psql -U postgres -d facedb
+	docker compose exec postgres psql -U postgres -d facedb
 
 db-migrate:
-	docker-compose exec app alembic upgrade head
+	docker compose exec app alembic upgrade head
 
 # Testing commands
 test:
-	docker-compose exec app pytest
+	docker compose exec app pytest
 
 health:
 	@echo "Checking API health..."
-	@curl -s http://localhost:8000/health | jq . || echo "API not responding"
+	@curl -s $(CURL_AUTH) "$(API_URL)/health" | jq . || echo "API not responding"
 
 list-faces:
 	@echo "Enrolled faces:"
-	@curl -s "http://localhost:8000/api/v1/faces?limit=100" | jq '.faces[] | {id, user_name, photo_type, quality_score, created_at}'
+	@curl -s $(CURL_AUTH) "$(API_URL)/api/v1/faces?limit=100" | jq '.faces[] | {id, user_name, photo_type, quality_score, created_at}'
 
 delete-all:
 	@echo "Deleting all faces..."
-	@curl -s "http://localhost:8000/api/v1/faces?limit=100" | jq -r '.faces[].id' | xargs -I {} curl -s -X DELETE "http://localhost:8000/api/v1/faces/{}" | jq -s 'map(select(.success == true)) | length' | xargs -I {} echo "{} faces deleted"
+	@curl -s $(CURL_AUTH) "$(API_URL)/api/v1/faces?limit=100" | jq -r '.faces[].id' | xargs -I {} curl -s $(CURL_AUTH) -X DELETE "$(API_URL)/api/v1/faces/{}" | jq -s 'map(select(.success == true)) | length' | xargs -I {} echo "{} faces deleted"
 	@echo "All faces deleted!"
 
 # Face operations
@@ -108,26 +120,25 @@ enroll:
 		exit 1; \
 	fi
 	@echo "Enrolling face: $(NAME)"
-	@curl -s -X POST http://localhost:8000/api/v1/faces/enroll \
+	@curl -s $(CURL_AUTH) -X POST "$(API_URL)/api/v1/faces/enroll" \
 		-F "image=@$(FILE)" \
-		-F "user_name=$(NAME)" \
-		-F "user_email=$(NAME)@example.com" | jq .
+		-F "user_name=$(NAME)" | jq .
 
 recognize:
 	@if [ -z "$(FILE)" ]; then \
 		echo "Usage: make recognize FILE=path/to/photo.jpg"; \
-		echo "Example: make recognize FILE=/tmp/vadim.jpg"; \
+		echo "Example: make recognize FILE=/tmp/photo.jpg"; \
 		exit 1; \
 	fi
 	@echo "Recognizing face..."
-	@curl -s -X POST http://localhost:8000/api/v1/faces/recognize \
+	@curl -s $(CURL_AUTH) -X POST "$(API_URL)/api/v1/faces/recognize" \
 		-F "image=@$(FILE)" \
 		-F "confidence_threshold=0.6" | jq .
 
 # Quality & Performance
 stats:
 	@echo "Quality Statistics:"
-	@docker-compose exec postgres psql -U postgres -d facedb -c "\
+	@docker compose exec postgres psql -U postgres -d facedb -c "\
 		SELECT \
 			photo_type, \
 			COUNT(*) as count, \
@@ -141,16 +152,15 @@ stats:
 check-quality:
 	@if [ -z "$(FILE)" ]; then \
 		echo "Usage: make check-quality FILE=path/to/photo.jpg"; \
-		echo "Example: make check-quality FILE=/tmp/vadim.jpg"; \
+		echo "Example: make check-quality FILE=/tmp/photo.jpg"; \
 		exit 1; \
 	fi
 	@echo "Checking photo quality..."
-	@curl -s -X POST http://localhost:8000/api/v1/faces/enroll \
+	@curl -s $(CURL_AUTH) -X POST "$(API_URL)/api/v1/faces/enroll" \
 		-F "image=@$(FILE)" \
-		-F "user_name=Quality Test" \
-		-F "user_email=test@example.com" | jq 'if .success then {quality_score: .face.quality_score, message: "✅ Quality passed"} else {error: .detail} end'
+		-F "user_name=Quality Test" | jq 'if .success then {quality_score: .face.quality_score, message: "✅ Quality passed"} else {error: .detail} end'
 	@echo "Cleaning up test enrollment..."
-	@curl -s "http://localhost:8000/api/v1/faces?limit=1" | jq -r '.faces[] | select(.user_name == "Quality Test") | .id' | xargs -I {} curl -s -X DELETE "http://localhost:8000/api/v1/faces/{}" > /dev/null
+	@curl -s $(CURL_AUTH) "$(API_URL)/api/v1/faces?limit=100" | jq -r '.faces[] | select(.user_name == "Quality Test") | .id' | xargs -I {} curl -s $(CURL_AUTH) -X DELETE "$(API_URL)/api/v1/faces/{}" > /dev/null
 
 # Development commands
 dev-setup:
@@ -159,24 +169,17 @@ dev-setup:
 	@echo "Created .env file. Please edit it with your settings."
 	@echo "Run 'make up' to start the services."
 
-fix-models:
-	@echo "Fixing InsightFace model directory structure..."
-	docker-compose exec app bash /app/scripts/fix-insightface-models.sh
-	@echo "Restarting app to reload models..."
-	docker-compose restart app
-	@echo "✅ Models fixed and app restarted"
-
 shell-app:
-	docker-compose exec app bash
+	docker compose exec app bash
 
 shell-db:
-	docker-compose exec postgres bash
+	docker compose exec postgres bash
 
 # Monitoring
 monitor:
 	@echo "Monitoring logs (Ctrl+C to exit)..."
-	docker-compose logs -f app | grep -E "(INFO|ERROR|WARNING)"
+	docker compose logs -f app | grep -E "(INFO|ERROR|WARNING)"
 
 errors:
 	@echo "Recent errors:"
-	docker-compose logs app | grep ERROR | tail -20
+	docker compose logs app | grep ERROR | tail -20

@@ -5,7 +5,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from functools import partial
 from io import BytesIO
+from typing import Any
 
 import cv2
 import httpx
@@ -13,7 +15,7 @@ import numpy as np
 from PIL import Image
 
 from src.config.settings import settings
-from src.services.door_service import door_service
+from src.triggers import MatchEvent, get_trigger_service
 from src.utils.access_logger import access_logger
 
 logger = logging.getLogger(__name__)
@@ -25,7 +27,7 @@ class WebcamService:
     def __init__(
         self,
         camera_id: int = 0,
-        api_base_url: str = None,
+        api_base_url: str | None = None,
     ):
         """
         Initialize webcam service.
@@ -291,7 +293,8 @@ class WebcamService:
                     headers={"x-face-token": api_token},  # API token
                 )
                 response.raise_for_status()
-                return response.json()
+                result: dict[str, Any] = response.json()
+                return result
         except httpx.HTTPStatusError as e:
             # Log the actual error response from the API
             try:
@@ -322,12 +325,13 @@ class WebcamService:
         remaining = self.cooldown_seconds - elapsed
         return max(0.0, remaining)
 
-    async def process_recognition_result(self, result: dict):
+    async def process_recognition_result(self, result: dict, liveness_passed: bool | None = None):
         """
-        Process recognition result and trigger door unlock if authorized.
+        Process recognition result and fire the configured on-match trigger.
 
         Args:
             result: Recognition result from multi-face API
+            liveness_passed: Liveness outcome for this frame, or None if liveness didn't run
         """
         if not result.get("success", False):
             # Recognition failed
@@ -353,8 +357,8 @@ class WebcamService:
         # Find best match across all detected faces
         best_match = None
         best_similarity = 0.0
-        best_match_face_data = None
-        best_match_processor = None
+        best_match_face_data: dict[str, Any] = {}
+        best_match_processor: str = "unknown"
 
         for detected_face in detected_faces:
             matches = detected_face.get("matches", [])
@@ -391,9 +395,15 @@ class WebcamService:
         user_name = best_match_face_data.get("user_name", "Unknown")
         user_email = best_match_face_data.get("user_email")
 
-        # Try to unlock door
-        unlock_success, door_action = await door_service.unlock_if_authorized(
-            user_name, best_similarity
+        trigger_result = await get_trigger_service().fire_if_authorized(
+            MatchEvent(
+                user_name=user_name,
+                user_email=user_email,
+                confidence=best_similarity,
+                processor=best_match_processor,
+                camera_id=self.camera_id,
+                liveness_passed=liveness_passed,
+            )
         )
 
         # Log the event with match-specific processor (shows AWS usage)
@@ -404,14 +414,14 @@ class WebcamService:
             user_name=user_name,
             user_email=user_email,
             processor=best_match_processor,  # This will show "antelopev2" or "antelopev2+aws"
-            door_action=door_action,
+            trigger_action=trigger_result.action,
             camera_id=self.camera_id,
             detection_time_ms=int(result.get("detection_time", 0) * 1000),
             recognition_time_ms=int(result.get("recognition_time", 0) * 1000),
         )
 
-        # If door unlocked successfully, start cooldown
-        if door_action == "unlocked":
+        # If the trigger fired successfully, start cooldown
+        if trigger_result.success:
             self.last_success_time = time.time()
             self.last_recognized_user = user_name
             logger.info(
@@ -425,7 +435,11 @@ class WebcamService:
         This runs continuously until stopped, capturing frames,
         detecting faces, sending to recognition API, and processing results.
         """
-        if not self.start_capture():
+        loop = asyncio.get_running_loop()
+
+        # Camera I/O and CV inference are blocking — keep them off the event
+        # loop so the API stays responsive while capture runs in-process.
+        if not await loop.run_in_executor(None, self.start_capture):
             logger.error("Failed to start camera capture")
             return
 
@@ -447,21 +461,21 @@ class WebcamService:
                     await asyncio.sleep(0.5)
                     continue
 
-                # Capture frame
-                frame = self.capture_frame()
+                frame = await loop.run_in_executor(None, self.capture_frame)
                 if frame is None:
                     await asyncio.sleep(0.1)
                     continue
 
-                # Check if frame contains a face
-                if not self.has_face(frame):
+                if not await loop.run_in_executor(None, self.has_face, frame):
                     await asyncio.sleep(self.capture_interval)
                     continue
 
-                # Convert frame to JPEG bytes
-                image_bytes = self.frame_to_jpeg_bytes(frame, quality=85)
+                image_bytes = await loop.run_in_executor(
+                    None, partial(self.frame_to_jpeg_bytes, frame, quality=85)
+                )
 
                 # Check liveness (anti-spoofing) before sending to recognition API
+                liveness_passed: bool | None = None
                 if self.liveness_provider is not None:
                     is_real, liveness_confidence, spoofing_type = await self.check_liveness(
                         image_bytes
@@ -504,13 +518,14 @@ class WebcamService:
                     logger.debug(
                         f"✅ Liveness check passed (confidence: {liveness_confidence:.3f})"
                     )
+                    liveness_passed = True
 
                 # Send to recognition API (synchronous - wait for response)
                 result = await self.recognize_face(image_bytes)
 
                 # Process result
                 if result:
-                    await self.process_recognition_result(result)
+                    await self.process_recognition_result(result, liveness_passed=liveness_passed)
 
                 # Wait remaining interval time
                 elapsed = time.time() - loop_start_time

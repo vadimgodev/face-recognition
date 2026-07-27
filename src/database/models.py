@@ -43,7 +43,7 @@ class Face(Base):
     )  # Model used for embedding
 
     # InsightFace specific embedding (for hybrid approach)
-    embedding_insightface: Mapped[list[float] | None] = mapped_column(
+    embedding_local: Mapped[list[float] | None] = mapped_column(
         Vector(512), nullable=True, comment="InsightFace embedding for fast search"
     )  # 512-dimensional InsightFace embedding
 

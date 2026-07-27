@@ -87,7 +87,7 @@ class FaceProvider(ABC):
         pass
 
     @abstractmethod
-    async def delete_face(self, face_id: str, collection_id: str = None) -> bool:
+    async def delete_face(self, face_id: str, collection_id: str | None = None) -> bool:
         """
         Delete a face from the provider's database.
 
@@ -132,6 +132,16 @@ class FaceProvider(ABC):
 
         Raises:
             Exception: For provider-specific errors
+        """
+        pass
+
+    @abstractmethod
+    async def initialize_all_collections(self) -> dict:
+        """
+        Initialize every collection this provider uses (all shards, if sharded).
+
+        Returns:
+            Dictionary with initialization results
         """
         pass
 

@@ -77,8 +77,12 @@ class RecognizeFaceResponse(BaseModel):
     total_matches: int = Field(..., description="Total number of matches found")
     processor: str = Field(..., description="Recognition processor used for this request")
     execution_time: float = Field(..., description="Execution time in seconds")
-    detection_time: float = Field(default=0.0, description="Face detection time in seconds")
-    recognition_time: float = Field(default=0.0, description="Face recognition time in seconds")
+    detection_time: float | None = Field(
+        None, description="Face detection time in seconds (null if not separately measured)"
+    )
+    recognition_time: float | None = Field(
+        None, description="Face recognition time in seconds (null if not separately measured)"
+    )
 
 
 class FaceListResponse(BaseModel):
@@ -181,8 +185,8 @@ class RecognizeMultipleFacesResponse(BaseModel):
     total_faces_recognized: int = Field(..., description="Number of faces with at least one match")
     processor: str = Field(..., description="Recognition processor used")
     execution_time: float = Field(..., description="Total execution time in seconds")
-    detection_time: float = Field(..., description="Face detection time in seconds")
-    recognition_time: float = Field(..., description="Face recognition time in seconds")
+    detection_time: float | None = Field(None, description="Face detection time in seconds")
+    recognition_time: float | None = Field(None, description="Face recognition time in seconds")
 
 
 # Liveness detection schemas

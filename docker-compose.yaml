@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: face-recognition-api
+    container_name: faceguard-api
     volumes:
     - ./src:/app/src
     - ./alembic:/app/alembic
@@ -16,7 +16,7 @@ services:
       redis:
         condition: service_healthy
     networks:
-    - face-recognition-network
+    - faceguard-network
     restart: unless-stopped
     command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
     labels:
@@ -28,10 +28,6 @@ services:
     - traefik.http.routers.api-secure.tls=true
     - traefik.http.routers.api-secure.tls.certresolver=myresolver
     - traefik.http.routers.api-secure.middlewares=api-auth
-    - traefik.http.routers.api-http.rule=Host(`${DOMAIN:-localhost}`) && (PathPrefix(`/api`)
-      || PathPrefix(`/health`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || PathPrefix(`/openapi.json`))
-    - traefik.http.routers.api-http.entrypoints=web
-    - traefik.http.routers.api-http.middlewares=api-auth
     # Uncomment below for NVIDIA GPU support on Linux servers:
     # deploy:
     #   resources:
@@ -44,7 +40,7 @@ services:
   # CHANGE IN PRODUCTION - see .env.example
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: face-recognition-postgres
+    container_name: faceguard-postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
@@ -60,11 +56,11 @@ services:
       timeout: 5s
       retries: 5
     networks:
-    - face-recognition-network
+    - faceguard-network
   # CHANGE IN PRODUCTION - see .env.example
   redis:
-    image: redis:7-alpine
-    container_name: face-recognition-redis
+    image: redis:8-alpine
+    container_name: faceguard-redis
     command: redis-server --requirepass ${REDIS_PASSWORD:-redis_change_me}
     volumes:
     - redis_data:/data
@@ -80,10 +76,10 @@ services:
       timeout: 5s
       retries: 5
     networks:
-    - face-recognition-network
+    - faceguard-network
   web:
-    image: node:20-alpine
-    container_name: face-recognition-web
+    image: node:22-alpine
+    container_name: faceguard-web
     working_dir: /app
     volumes:
     - ./web:/app
@@ -96,7 +92,7 @@ services:
     command: sh -c "npm install && npm run dev"
     restart: unless-stopped
     networks:
-    - face-recognition-network
+    - faceguard-network
     depends_on:
     - app
     env_file:
@@ -112,22 +108,17 @@ services:
     - traefik.http.routers.web-secure.tls.certresolver=myresolver
     - traefik.http.routers.web-secure.priority=1
     - traefik.http.routers.web-secure.middlewares=web-auth
-    - traefik.http.routers.web-http.rule=Host(`${DOMAIN:-localhost}`)
-    - traefik.http.routers.web-http.entrypoints=web
-    - traefik.http.routers.web-http.priority=1
-    - traefik.http.routers.web-http.middlewares=web-auth
     - traefik.http.middlewares.web-auth.basicauth.usersfile=/shared/.htpasswd
     - traefik.http.middlewares.api-auth.basicauth.usersfile=/shared/.htpasswd
-    - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
-    - traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true
   traefik:
-    image: traefik:v3.0.2
-    container_name: face-recognition-traefik
+    image: traefik:v3.7.8
+    container_name: faceguard-traefik
     command:
-    - --api.insecure=true
     - --providers.docker=true
     - --providers.docker.exposedbydefault=false
     - --entrypoints.web.address=:80
+    - --entrypoints.web.http.redirections.entrypoint.to=websecure
+    - --entrypoints.web.http.redirections.entrypoint.scheme=https
     - --entrypoints.websecure.address=:443
     - --certificatesresolvers.myresolver.acme.tlschallenge=true
     - --certificatesresolvers.myresolver.acme.email=${ACME_EMAIL:-admin@example.com}
@@ -135,7 +126,6 @@ services:
     ports:
     - 80:80
     - 443:443
-    - 8080:8080
     restart: unless-stopped
     volumes:
     - ./letsencrypt:/letsencrypt
@@ -143,7 +133,7 @@ services:
     - /etc/localtime:/etc/localtime:ro
     - htpasswd_data:/shared:ro
     networks:
-    - face-recognition-network
+    - faceguard-network
     depends_on:
     - web
 volumes:
@@ -151,5 +141,5 @@ volumes:
   redis_data: null
   htpasswd_data: null
 networks:
-  face-recognition-network:
+  faceguard-network:
     driver: bridge

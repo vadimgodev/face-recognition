@@ -321,87 +321,76 @@ class TestAWSProperties:
 # ============================================================================
 class TestProviderFactory:
 
-    @patch("src.providers.factory._insightface_cache", None)
-    @patch("src.providers.factory._aws_cache", None)
     @patch("src.providers.factory.settings")
     def test_create_unknown_provider_raises_ValueError(self, mock_settings):
         from src.providers.factory import ProviderFactory
 
-        mock_settings.face_provider = "nonexistent_provider"
-
         with pytest.raises(ValueError, match="Unsupported provider"):
             ProviderFactory.create_provider("nonexistent_provider")
 
-    @patch("src.providers.factory._insightface_cache", None)
     @patch("src.providers.factory.settings")
-    @patch("src.providers.factory.InsightFaceProvider")
-    def test_create_insightface_returns_cached_singleton(self, mock_provider_cls, mock_settings):
-        """Calling create_provider('insightface') twice returns the same instance."""
+    def test_create_insightface_returns_cached_singleton(self, mock_settings):
+        """Calling get_insightface_provider() twice returns the same instance."""
         import src.providers.factory as factory_module
 
+        mock_settings.local_provider = "insightface"
         mock_settings.insightface_model = "buffalo_l"
         mock_settings.insightface_det_size = 640
         mock_settings.insightface_ctx_id = -1
 
-        mock_instance = MagicMock()
-        mock_provider_cls.return_value = mock_instance
-
-        # Reset cache
-        factory_module._insightface_cache = None
+        factory_module.clear_provider_cache()
 
         first = factory_module.get_insightface_provider()
         second = factory_module.get_insightface_provider()
 
         assert first is second
-        # InsightFaceProvider constructor called only once
-        mock_provider_cls.assert_called_once()
 
-        # Cleanup
-        factory_module._insightface_cache = None
+        factory_module.clear_provider_cache()
 
-    @patch("src.providers.factory._aws_cache", None)
+    @patch("src.providers.aws_rekognition.get_collection_manager")
+    @patch("src.providers.aws_rekognition.settings")
+    @patch("src.providers.aws_rekognition.boto3")
     @patch("src.providers.factory.settings")
-    @patch("src.providers.factory.AWSRekognitionProvider")
-    def test_create_aws_returns_cached_singleton(self, mock_provider_cls, mock_settings):
-        """Calling get_aws_provider twice returns the same instance."""
+    def test_create_aws_returns_cached_singleton(
+        self, mock_factory_settings, mock_boto3, mock_aws_settings, mock_cm
+    ):
+        """Calling get_aws_provider() twice returns the same instance."""
         import src.providers.factory as factory_module
 
-        mock_instance = MagicMock()
-        mock_provider_cls.return_value = mock_instance
+        mock_factory_settings.cloud_provider = "aws_rekognition"
+        mock_aws_settings.aws_access_key_id = "fake"
+        mock_aws_settings.aws_secret_access_key = "fake"
+        mock_aws_settings.aws_region = "us-east-1"
+        mock_aws_settings.aws_rekognition_collection_id = "test-collection"
+        mock_boto3.client.return_value = MagicMock()
 
-        factory_module._aws_cache = None
+        factory_module.clear_provider_cache()
 
         first = factory_module.get_aws_provider()
         second = factory_module.get_aws_provider()
 
         assert first is second
-        mock_provider_cls.assert_called_once()
 
-        # Cleanup
-        factory_module._aws_cache = None
+        factory_module.clear_provider_cache()
 
-    @patch("src.providers.factory._insightface_cache", None)
-    @patch("src.providers.factory._aws_cache", None)
     @patch("src.providers.factory.settings")
-    @patch("src.providers.factory.InsightFaceProvider")
-    def test_create_provider_defaults_to_settings(self, mock_provider_cls, mock_settings):
-        """When no provider_name given, uses settings.face_provider."""
+    def test_create_provider_defaults_to_settings(self, mock_settings):
+        """When no provider_name given, resolves from settings.recognition_mode."""
         import src.providers.factory as factory_module
 
-        mock_settings.face_provider = "insightface"
+        mock_settings.recognition_mode = "local"
+        mock_settings.local_provider = "insightface"
         mock_settings.insightface_model = "buffalo_l"
         mock_settings.insightface_det_size = 640
         mock_settings.insightface_ctx_id = -1
 
-        mock_instance = MagicMock()
-        mock_provider_cls.return_value = mock_instance
-        factory_module._insightface_cache = None
+        factory_module.clear_provider_cache()
 
         result = factory_module.ProviderFactory.create_provider()
-        assert result is mock_instance
+        assert result.name == "insightface"
+        assert result.embedding_dim == 512
 
-        # Cleanup
-        factory_module._insightface_cache = None
+        factory_module.clear_provider_cache()
 
     def test_get_available_providers(self):
         from src.providers.factory import ProviderFactory
@@ -409,3 +398,22 @@ class TestProviderFactory:
         providers = ProviderFactory.get_available_providers()
         assert "aws_rekognition" in providers
         assert "insightface" in providers
+
+
+class TestRegistryFactory:
+    def test_get_local_provider_resolves_setting(self):
+        from src.providers import factory
+
+        factory.clear_provider_cache()
+        with patch("src.providers.factory.settings") as s:
+            s.local_provider = "insightface"
+            provider = factory.get_local_provider()
+        assert provider.name == "insightface"
+        assert provider.embedding_dim == 512
+
+    def test_embedding_dim_mismatch_fails_startup(self):
+        from src.utils.startup_validation import validate_embedding_dim
+
+        bad = MagicMock(embedding_dim=128, name="tiny")
+        with pytest.raises(RuntimeError, match="512"):
+            validate_embedding_dim(bad)

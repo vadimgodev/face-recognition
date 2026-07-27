@@ -16,7 +16,7 @@ import hashlib
 import logging
 import threading
 from io import BytesIO
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 from insightface.app import FaceAnalysis
@@ -28,11 +28,13 @@ from src.exceptions import (
     NoFaceDetectedError,
 )
 from src.providers.base import EnrollmentResult, FaceMatch, FaceMetadata, FaceProvider
+from src.providers.registry import register_local
 from src.utils.face_processing import convert_insightface_bbox
 
 logger = logging.getLogger(__name__)
 
 
+@register_local("insightface")
 class InsightFaceProvider(FaceProvider):
     """
     InsightFace provider for local face recognition.
@@ -40,6 +42,8 @@ class InsightFaceProvider(FaceProvider):
     Uses pre-trained models to extract face embeddings locally.
     No API calls, no costs, runs entirely on your hardware.
     """
+
+    embedding_dim = 512
 
     def __init__(
         self,
@@ -155,11 +159,11 @@ class InsightFaceProvider(FaceProvider):
         cached_embedding = await cache.get_json(cache_key)
         if cached_embedding is not None:
             logger.debug(f"Embedding cache HIT for image hash {image_hash[:16]}")
-            return cached_embedding
+            return cast(list[float], cached_embedding)
 
         logger.debug(f"Embedding cache MISS for image hash {image_hash[:16]}")
 
-        def _extract():
+        def _extract() -> list[float]:
             # Load image
             image = Image.open(BytesIO(image_bytes))
             image_np = np.array(image.convert("RGB"))
@@ -176,8 +180,9 @@ class InsightFaceProvider(FaceProvider):
             # Get embedding from first face
             face = faces[0]
             embedding = face.normed_embedding  # Already L2 normalized
+            embedding_list: list[float] = embedding.tolist()
 
-            return embedding.tolist()
+            return embedding_list
 
         # Run in thread pool since InsightFace is CPU/GPU intensive
         loop = asyncio.get_running_loop()
@@ -199,7 +204,7 @@ class InsightFaceProvider(FaceProvider):
             List of face dictionaries with bbox, embedding, confidence, etc.
         """
 
-        def _detect():
+        def _detect() -> list[dict[str, Any]]:
             # Load image
             image = Image.open(BytesIO(image_bytes))
             image_np = np.array(image.convert("RGB"))
@@ -208,7 +213,7 @@ class InsightFaceProvider(FaceProvider):
             app = self._get_app()
             faces = app.get(image_np)
 
-            results = []
+            results: list[dict[str, Any]] = []
             for idx, face in enumerate(faces):
                 # Convert bbox to BoundingBox object
                 bbox = convert_insightface_bbox(face.bbox)

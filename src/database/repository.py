@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from typing import cast
+
 from sqlalchemy import delete, func, select
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.models import Face
@@ -64,7 +67,7 @@ class FaceRepository:
         """
         result = await self.session.execute(delete(Face).where(Face.id == face_id))
         await self.session.commit()
-        return result.rowcount > 0
+        return cast(CursorResult, result).rowcount > 0
 
     async def search_by_embedding(
         self, embedding: list[float], threshold: float = 0.7, limit: int = 10
@@ -90,16 +93,16 @@ class FaceRepository:
         # This gives us 0-1 where 1 is identical
 
         # Build query using pgvector's cosine_distance operator
-        similarity_expr = 1 - Face.embedding_insightface.cosine_distance(embedding) / 2
+        similarity_expr = 1 - Face.embedding_local.cosine_distance(embedding) / 2
 
         query = (
             select(
                 Face,
                 similarity_expr.label("similarity"),
             )
-            .where(Face.embedding_insightface.isnot(None))
+            .where(Face.embedding_local.isnot(None))
             .where(similarity_expr >= threshold)
-            .order_by(Face.embedding_insightface.cosine_distance(embedding))
+            .order_by(Face.embedding_local.cosine_distance(embedding))
             .limit(limit)
         )
 

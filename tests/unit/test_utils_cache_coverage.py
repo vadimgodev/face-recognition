@@ -221,7 +221,7 @@ class TestAccessLoggerRecognitionEvent:
                 user_name="Alice",
                 user_email="alice@example.com",
                 processor="aws_rekognition",
-                door_action="unlocked",
+                trigger_action="fired",
                 camera_id=1,
                 custom_field="value",
             )
@@ -235,7 +235,7 @@ class TestAccessLoggerRecognitionEvent:
             assert extra["user_name"] == "Alice"
             assert extra["user_email"] == "alice@example.com"
             assert extra["processor"] == "aws_rekognition"
-            assert extra["door_action"] == "unlocked"
+            assert extra["trigger_action"] == "fired"
             assert extra["camera_id"] == 1
             assert extra["custom_field"] == "value"
 
@@ -253,13 +253,13 @@ class TestAccessLoggerRecognitionEvent:
                 confidence=0.95,
                 execution_time_ms=100,
                 user_name="Bob",
-                door_action="unlocked",
+                trigger_action="fired",
             )
             msg = mock_info.call_args[0][0]
             assert "Recognition success" in msg
             assert "Bob" in msg
             assert "0.95" in msg
-            assert "Door unlocked" in msg
+            assert "Trigger fired" in msg
 
     @patch("src.utils.access_logger.settings")
     def test_text_format_unknown_user(self, mock_settings):
@@ -280,7 +280,7 @@ class TestAccessLoggerRecognitionEvent:
             assert "0.32" in msg
 
     @patch("src.utils.access_logger.settings")
-    def test_text_format_no_door_action(self, mock_settings):
+    def test_text_format_no_trigger_action(self, mock_settings):
         mock_settings.access_log_output = "stdout"
         mock_settings.access_log_format = "text"
 
@@ -295,7 +295,7 @@ class TestAccessLoggerRecognitionEvent:
                 user_name="Charlie",
             )
             msg = mock_info.call_args[0][0]
-            assert "Door" not in msg
+            assert "Trigger" not in msg
 
     @patch("src.utils.access_logger.settings")
     def test_json_format_optional_fields_omitted(self, mock_settings):
@@ -316,7 +316,7 @@ class TestAccessLoggerRecognitionEvent:
             assert "user_name" not in extra
             assert "user_email" not in extra
             assert "processor" not in extra
-            assert "door_action" not in extra
+            assert "trigger_action" not in extra
 
 
 class TestAccessLoggerCooldownEvent:
@@ -1316,6 +1316,72 @@ class TestValidateStartupRequirements:
     @patch("src.utils.startup_validation.validate_liveness_configuration")
     def test_failure_returns_false_when_fail_on_error_false(self, mock_validate_liveness):
         mock_validate_liveness.return_value = (False, ["Error 1"])
+
+        from src.utils.startup_validation import validate_startup_requirements
+
+        result = validate_startup_requirements(fail_on_error=False)
+        assert result is False
+
+    @patch("src.utils.startup_validation.validate_liveness_configuration")
+    @patch("src.utils.startup_validation.registry.resolve_local")
+    @patch("src.utils.startup_validation.settings.recognition_mode", "local")
+    def test_embedding_dim_mismatch_raises_when_fail_on_error_true(
+        self, mock_resolve_local, mock_validate_liveness
+    ):
+        mock_validate_liveness.return_value = (True, [])
+
+        class DummyProvider:
+            embedding_dim = 128
+            name = "tiny"
+
+        mock_resolve_local.return_value = DummyProvider
+
+        from src.utils.startup_validation import validate_startup_requirements
+
+        with pytest.raises(RuntimeError, match="512"):
+            validate_startup_requirements(fail_on_error=True)
+
+    @patch("src.utils.startup_validation.validate_liveness_configuration")
+    @patch("src.utils.startup_validation.registry.resolve_local")
+    @patch("src.utils.startup_validation.settings.recognition_mode", "local")
+    def test_embedding_dim_mismatch_returns_false_when_fail_on_error_false(
+        self, mock_resolve_local, mock_validate_liveness
+    ):
+        mock_validate_liveness.return_value = (True, [])
+
+        class DummyProvider:
+            embedding_dim = 128
+            name = "tiny"
+
+        mock_resolve_local.return_value = DummyProvider
+
+        from src.utils.startup_validation import validate_startup_requirements
+
+        result = validate_startup_requirements(fail_on_error=False)
+        assert result is False
+
+    @patch("src.utils.startup_validation.validate_liveness_configuration")
+    @patch("src.utils.startup_validation.registry.resolve_local")
+    @patch("src.utils.startup_validation.settings.recognition_mode", "local")
+    def test_unknown_local_provider_returns_false_when_fail_on_error_false(
+        self, mock_resolve_local, mock_validate_liveness
+    ):
+        from src.exceptions import ConfigurationError
+
+        mock_validate_liveness.return_value = (True, [])
+        mock_resolve_local.side_effect = ConfigurationError("Unknown local provider 'nope'")
+
+        from src.utils.startup_validation import validate_startup_requirements
+
+        result = validate_startup_requirements(fail_on_error=False)
+        assert result is False
+
+    @patch("src.utils.startup_validation.validate_liveness_configuration")
+    @patch("src.utils.startup_validation.settings.webcam_enabled", True)
+    @patch("src.triggers.providers.settings.trigger_provider", "webhook")
+    @patch("src.triggers.providers.settings.trigger_webhook_url", "")
+    def test_bad_trigger_config_returns_false_when_webcam_enabled(self, mock_validate_liveness):
+        mock_validate_liveness.return_value = (True, [])
 
         from src.utils.startup_validation import validate_startup_requirements
 

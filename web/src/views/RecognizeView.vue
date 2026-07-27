@@ -42,7 +42,7 @@
 
         <button type="submit" class="btn btn-primary" :disabled="loading">
           <span v-if="loading">Recognizing...</span>
-          <span v-else">Recognize Face</span>
+          <span v-else>Recognize Face</span>
         </button>
       </form>
 
@@ -72,9 +72,6 @@
             <div class="result-confidence">
               {{ (result.similarity * 100).toFixed(1) }}%
             </div>
-            <div v-if="livenessChecked" class="liveness-badge" :class="livenessClass" :title="livenessTooltip">
-              {{ livenessIcon }} {{ livenessText }}
-            </div>
             <div v-if="result.photo_captured" class="photo-captured-badge" title="Photo was automatically captured for verification">
               📸 Captured
             </div>
@@ -90,7 +87,7 @@
 </template>
 
 <script>
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { faceApi } from '../api/faceApi'
 
 export default {
@@ -104,7 +101,6 @@ export default {
     const results = ref([])
     const attempted = ref(false)
     const executionTime = ref(null)
-    const livenessResult = ref(null)
 
     const handleFileSelect = (event) => {
       const file = event.target.files[0]
@@ -139,7 +135,6 @@ export default {
         const response = await faceApi.recognizeFace(formData)
         results.value = response.matches || []
         executionTime.value = response.execution_time || null
-        livenessResult.value = response.liveness_result || null
         attempted.value = true
 
         if (results.value.length > 0) {
@@ -187,33 +182,6 @@ export default {
       }
     }
 
-    const livenessChecked = computed(() => {
-      return livenessResult.value !== null
-    })
-
-    const livenessClass = computed(() => {
-      if (!livenessResult.value) return ''
-      return livenessResult.value.is_real ? 'liveness-real' : 'liveness-fake'
-    })
-
-    const livenessIcon = computed(() => {
-      if (!livenessResult.value) return ''
-      return livenessResult.value.is_real ? '✅' : '🚫'
-    })
-
-    const livenessText = computed(() => {
-      if (!livenessResult.value) return ''
-      const confidence = (livenessResult.value.confidence * 100).toFixed(1)
-      return livenessResult.value.is_real ? `Real (${confidence}%)` : `Fake (${confidence}%)`
-    })
-
-    const livenessTooltip = computed(() => {
-      if (!livenessResult.value) return ''
-      return livenessResult.value.is_real
-        ? 'Liveness check passed - Real person detected'
-        : `Spoofing detected - ${livenessResult.value.spoofing_type || 'Unknown type'}`
-    })
-
     return {
       imagePreview,
       confidenceThreshold,
@@ -225,12 +193,7 @@ export default {
       handleFileSelect,
       handleSubmit,
       formatProcessor,
-      getProcessorTooltip,
-      livenessChecked,
-      livenessClass,
-      livenessIcon,
-      livenessText,
-      livenessTooltip
+      getProcessorTooltip
     }
   }
 }
@@ -456,27 +419,5 @@ export default {
   font-size: 0.8em;
   font-weight: 600;
   border: 1px solid #c3e6cb;
-}
-
-.liveness-badge {
-  padding: 6px 12px;
-  border-radius: 15px;
-  font-size: 0.85em;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.liveness-badge.liveness-real {
-  background: #d4edda;
-  color: #155724;
-  border: 1px solid #c3e6cb;
-}
-
-.liveness-badge.liveness-fake {
-  background: #ffe6e6;
-  color: #c00;
-  border: 1px solid #ffcccc;
 }
 </style>

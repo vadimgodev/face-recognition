@@ -61,7 +61,7 @@ class AccessLogger:
         user_name: str | None = None,
         user_email: str | None = None,
         processor: str | None = None,
-        door_action: str | None = None,
+        trigger_action: str | None = None,
         camera_id: int = 0,
         **extra_fields: Any,
     ):
@@ -75,7 +75,7 @@ class AccessLogger:
             user_name: Recognized user's name (if successful)
             user_email: Recognized user's email (if successful)
             processor: Recognition processor used
-            door_action: Door action taken (unlocked/denied)
+            trigger_action: On-match trigger outcome (fired/denied/error)
             camera_id: Camera device ID
             **extra_fields: Additional fields to include in log
         """
@@ -94,8 +94,8 @@ class AccessLogger:
             event_data["user_email"] = user_email
         if processor:
             event_data["processor"] = processor
-        if door_action:
-            event_data["door_action"] = door_action
+        if trigger_action:
+            event_data["trigger_action"] = trigger_action
 
         # Add any extra fields
         event_data.update(extra_fields)
@@ -109,8 +109,8 @@ class AccessLogger:
                 text_msg += f"{user_name} (confidence: {confidence:.2f})"
             else:
                 text_msg += f"Unknown (confidence: {confidence:.2f})"
-            if door_action:
-                text_msg += f" - Door {door_action}"
+            if trigger_action:
+                text_msg += f" - Trigger {trigger_action}"
             self.logger.info(text_msg)
 
     def log_cooldown_event(

@@ -1,0 +1,29 @@
+name: Triage
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+  schedule:
+    - cron: "17 3 * * *"
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+jobs:
+  label:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/labeler@v7
+  stale:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v10
+        with:
+          days-before-stale: 60
+          days-before-close: 30
+          exempt-issue-labels: security,pinned
+          exempt-pr-labels: security,pinned
+          stale-issue-message: >-
+            This issue has been inactive for 60 days. It will be closed in 30 days
+            unless there is new activity.
