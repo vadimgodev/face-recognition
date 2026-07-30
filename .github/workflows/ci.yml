@@ -12,13 +12,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Set up Python 3.13
+      - name: Set up Python 3.14
         uses: actions/setup-python@v7
         with:
-          python-version: "3.13"
+          python-version: "3.14"
 
       - name: Install linting tools
-        run: pip install 'ruff>=0.15,<0.16' 'black>=25.11,<26.0'
+        run: pip install 'ruff>=0.16,<0.17' 'black>=26,<27'
 
       - name: Run ruff
         run: ruff check src/ tests/
@@ -32,16 +32,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Set up Python 3.13
+      - name: Set up Python 3.14
         uses: actions/setup-python@v7
         with:
-          python-version: "3.13"
+          python-version: "3.14"
           cache: pip
 
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
-      - name: Patch torch for Python 3.13 compatibility
+      - name: Patch torch for Python 3.14 compatibility
         run: |
           SITE=$(python -c "import site; print(site.getsitepackages()[0])")
           sed -i 's/except OSError:/except (OSError, SyntaxError):/' "$SITE/torch/_jit_internal.py" 2>/dev/null || true
@@ -59,7 +59,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           files: ./coverage.xml
           fail_ci_if_error: false
