@@ -1,6 +1,6 @@
 # Web Framework
-fastapi==0.140.7
-uvicorn[standard]==0.51.0
+fastapi==0.141.1
+uvicorn[standard]==0.52.0
 pydantic==2.13.4
 pydantic-settings==2.14.2
 pydantic[email]==2.13.4
@@ -13,7 +13,7 @@ alembic==1.18.5
 pgvector==0.5.0
 
 # AWS Services
-boto3==1.43.57
+boto3==1.43.62
 
 # Storage Abstraction
 fs==2.4.16
