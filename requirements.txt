@@ -36,7 +36,7 @@ insightface==1.0.1
 onnxruntime==1.28.0
 
 # Anti-Spoofing (Silent-Face)
-torch>=2.0.0
+torch>=2.13.0
 torchvision>=0.28.0
 
 # Environment & Config
