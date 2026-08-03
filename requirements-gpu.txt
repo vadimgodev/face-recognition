@@ -29,7 +29,7 @@ hiredis==3.4.0
 
 # Image Processing
 Pillow==12.3.0
-opencv-python==4.13.0.92
+opencv-python==5.0.0.93
 
 # Face Recognition (InsightFace) - GPU version
 insightface==1.0.1
